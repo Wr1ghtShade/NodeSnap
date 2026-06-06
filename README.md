@@ -60,6 +60,127 @@ NodeSnap/
 - 📋 Journal d'audit complet
 - 👥 Gestion multi-utilisateurs avec rôles (admin / user)
 
+## 📸 Aperçu
+
+> Interface disponible en thème **dark** et **light** — bascule en un clic depuis la barre de navigation.
+
+### Dashboard
+
+<table>
+<tr>
+<td align="center"><b>🌑 Dark</b></td>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/dashboard-dark-1.png" alt="Dashboard dark" width="480"/></td>
+<td><img src="docs/dashboard-light-1.png" alt="Dashboard light" width="480"/></td>
+</tr>
+</table>
+
+Vue d'ensemble : compteurs (équipements, snapshots, vendors, taille BDD), tableau des équipements enregistrés avec vendor, localisation, planning et dernier backup.
+
+---
+
+### Ajout / Scan d'un équipement
+
+<table>
+<tr>
+<td align="center"><b>🌑 Dark</b></td>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/add_equipement_dark.png" alt="Ajout équipement dark" width="480"/></td>
+<td><img src="docs/add_equipement_light.png" alt="Ajout équipement light" width="480"/></td>
+</tr>
+</table>
+
+Formulaire de scan SSH avec détection automatique du vendor, métadonnées optionnelles (nom personnalisé, localisation, commentaire).
+
+---
+
+### Fiche équipement & Planification
+
+<table>
+<tr>
+<td align="center"><b>🌑 Dark</b></td>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/focus_equipement_dark.png" alt="Fiche équipement dark" width="480"/></td>
+<td><img src="docs/focus_equipement_light.png" alt="Fiche équipement light" width="480"/></td>
+</tr>
+</table>
+
+Détail d'un équipement : informations, commentaire, planification automatique (credentials, intervalle, statut) et historique des snapshots avec SHA-256.
+
+---
+
+### Visualisation de configuration
+
+<table>
+<tr>
+<td align="center"><b>🌑 Dark</b></td>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/conf_view_dark.png" alt="Vue configuration dark" width="480"/></td>
+<td><img src="docs/conf_view_light.png" alt="Vue configuration light" width="480"/></td>
+</tr>
+</table>
+
+Visionneuse de snapshot avec coloration syntaxique, recherche en texte intégral, navigation entre snapshots et export `.txt` / `.json`.
+
+---
+
+### Journal d'audit
+
+<table>
+<tr>
+<td align="center"><b>🌑 Dark</b></td>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/audit_dark.png" alt="Audit dark" width="480"/></td>
+<td><img src="docs/audit_light.png" alt="Audit light" width="480"/></td>
+</tr>
+</table>
+
+Traçabilité complète : connexions, scans manuels et automatiques, modifications, suppressions — filtrable par utilisateur, action et source (web / scheduler).
+
+---
+
+### Gestion des utilisateurs
+
+<table>
+<tr>
+<td align="center"><b>🌑 Dark</b></td>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/user_management_dark.png" alt="Utilisateurs dark" width="480"/></td>
+<td><img src="docs/user_management_light.png" alt="Utilisateurs light" width="480"/></td>
+</tr>
+</table>
+
+Gestion multi-utilisateurs avec rôles admin / user, création, modification et changement de mot de passe.
+
+---
+
+### Documentation API
+
+<table>
+<tr>
+<td align="center"><b>☀️ Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/api_light.png" alt="API Swagger" width="480"/></td>
+</tr>
+</table>
+
+Documentation Swagger interactive accessible sur `/api/docs` — tous les endpoints REST sont explorables et testables directement.
+
+---
+
 ## ⚙️ Installation
 
 ```bash
