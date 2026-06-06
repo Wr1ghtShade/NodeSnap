@@ -42,3 +42,4 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+sync.sh
