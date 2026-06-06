@@ -3,14 +3,12 @@ import sys
 import getpass
 from datetime import datetime
 
-from passlib.context import CryptContext
+import bcrypt
 
 from storage.database import get_connection, init_db
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # Hash constant utilisé pour l'anti-timing-attack dans authenticate()
-_DUMMY_HASH = pwd_context.hash("nodesnap_dummy_timing_guard")
+_DUMMY_HASH = bcrypt.hashpw(b"nodesnap_dummy_timing_guard", bcrypt.gensalt())
 
 USERS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -44,12 +42,12 @@ def init_users_table():
 
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
-        return pwd_context.verify(plain, hashed)
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
 
@@ -81,7 +79,7 @@ def authenticate(username: str, password: str) -> dict | None:
             (username,),
         ).fetchone()
         if not row:
-            pwd_context.verify("dummy", _DUMMY_HASH)
+            bcrypt.checkpw(b"dummy", _DUMMY_HASH)
             return None
         if not verify_password(password, row["password_hash"]):
             return None
