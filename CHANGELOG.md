@@ -32,6 +32,15 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Endpoint debug session supprimé
 - Permissions systemd renforcées (NoNewPrivileges, PrivateTmp, ProtectSystem…)
 
+## [1.0.1] — 2026-06-06
+
+### 🔧 Correctifs
+
+- Remplacement de `passlib` (non maintenu) par `bcrypt` natif — compatibilité Python 3.13 / bcrypt 5.x
+- Correction de l'affichage de la version dans le footer web (`sys.path` non résolu sous uvicorn)
+- Version FastAPI (`/api/docs`) synchronisée avec `version.py`
+- Déplacement du projet vers `/var/www/nodesnap`
+
 ---
 
 *Les versions suivantes seront ajoutées ici au fil des mises à jour.*

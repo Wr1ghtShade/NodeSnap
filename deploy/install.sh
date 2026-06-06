@@ -113,7 +113,7 @@ read -r -p "Créer un compte admin maintenant ? [O/n] " CREATE_ADMIN
 CREATE_ADMIN="${CREATE_ADMIN:-O}"
 if [[ "$CREATE_ADMIN" =~ ^[Oo]$ ]]; then
     read -r -p "Nom d'utilisateur admin : " ADMIN_USER
-    sudo -u "$INSTALL_USER" "$WORKDIR/.venv/bin/python3" -m storage.users create "$ADMIN_USER" admin
+    (cd "$WORKDIR" && sudo -u "$INSTALL_USER" "$WORKDIR/.venv/bin/python3" -m storage.users create "$ADMIN_USER" admin)
 fi
 
 # ── Résumé ───────────────────────────────────────────────────────────────────

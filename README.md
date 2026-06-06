@@ -40,9 +40,12 @@ NodeSnap/
 ├── services/
 │   └── scheduler.py         # Worker de backups automatiques (threading)
 │
-└── deploy/
-    ├── install.sh           # Script d'installation automatisé
-    └── nodesnap-web.service # Template du service systemd
+├── deploy/
+│   ├── install.sh           # Script d'installation automatisé
+│   └── nodesnap-web.service # Template du service systemd
+│
+├── CHANGELOG.md             # Historique des versions
+└── README.md
 ```
 
 ## ✨ Fonctionnalités
@@ -86,10 +89,10 @@ Variables disponibles dans `.env` :
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-Créer le premier utilisateur admin :
+Créer le premier utilisateur admin (le mot de passe est demandé en interactif) :
 
 ```bash
-python -m storage.users create admin admin
+python -m storage.users create <username> admin
 ```
 
 ### CLI (scan ponctuel)
@@ -144,7 +147,13 @@ Pour bumper la version avant un tag Git :
 git add version.py
 git commit -m "bump: v1.1.0"
 git tag v1.1.0
+git push --follow-tags
 ```
+
+> ⚠️ Après chaque bump, redémarrer le service pour que l'interface reflète la nouvelle version :
+> ```bash
+> sudo systemctl restart nodesnap-web
+> ```
 
 ## 📄 Licence
 

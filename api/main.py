@@ -36,7 +36,7 @@ if not SESSION_SECRET:
     SESSION_SECRET = secrets.token_urlsafe(48)
     log.warning(
         "SESSION_SECRET non défini dans .env, clé temporaire générée. "
-        "Crée ~/nodesnap/.env avec une clé stable pour la production."
+        f"Crée {PROJECT_DIR / '.env'} avec une clé stable pour la production."
     )
 
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -46,7 +46,7 @@ STATIC_DIR = BASE_DIR / "static"
 app = FastAPI(
     title="NodeSnap",
     description="Network Configuration Backup System",
-    version="0.1.0",
+    version=__version__,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
