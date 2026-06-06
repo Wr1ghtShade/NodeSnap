@@ -37,8 +37,12 @@ NodeSnap/
 │   ├── users.py             # Utilisateurs & authentification (bcrypt)
 │   └── audit.py             # Journal d'audit
 │
-└── services/
-    └── scheduler.py         # Worker de backups automatiques (threading)
+├── services/
+│   └── scheduler.py         # Worker de backups automatiques (threading)
+│
+└── deploy/
+    ├── install.sh           # Script d'installation automatisé
+    └── nodesnap-web.service # Template du service systemd
 ```
 
 ## Fonctionnalités
@@ -94,6 +98,24 @@ python -m storage.users create admin admin
 ```bash
 ./nodesnap.py 192.168.1.1 admin --common-name "Switch cœur"
 ```
+
+## Déploiement (service systemd)
+
+Après avoir cloné le repo, un seul script installe tout :
+
+```bash
+sudo bash deploy/install.sh
+```
+
+Le script s'occupe de :
+- Créer le venv et installer les dépendances
+- Générer le fichier `.env` avec une `SESSION_SECRET` aléatoire
+- Créer les dossiers `backups/` et `logs/`
+- Installer et démarrer le service systemd `nodesnap-web`
+- Ajouter l'alias `nodesnap-env` dans le shell
+- Créer le premier compte administrateur (interactif)
+
+> Le service se relance automatiquement au redémarrage du serveur.
 
 ## Commandes utiles (production)
 
