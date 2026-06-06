@@ -54,6 +54,7 @@ NodeSnap/
 - 🌐 Vendors supportés : Fortinet, Aruba CX, Aruba ProCurve, HP Comware, Palo Alto, Cisco IOS
 - 🗄️ Stockage SQLite avec déduplication par SHA-256
 - 🖥️ Interface web (FastAPI + Jinja2) : dashboard, scan, visualisation de snapshots
+- 🌗 Thème dark / light avec mémorisation par cookie
 - ⏱️ Scheduler de backups automatiques avec gestion des échecs
 - 🔐 Credentials chiffrés AES-256-GCM
 - 📋 Journal d'audit complet
