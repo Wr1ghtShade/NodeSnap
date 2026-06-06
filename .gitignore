@@ -43,3 +43,4 @@ build/
 .coverage
 htmlcov/
 sync.sh
+sync.sh
