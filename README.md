@@ -3,63 +3,6 @@
 Outil de sauvegarde de configurations d'équipements réseau multi-vendor.  
 Stocke les snapshots en SQLite, détecte les changements, et expose une interface web ainsi qu'une API REST.
 
-## 🗂️ Arborescence
-
-```
-NodeSnap/
-├── nodesnap.py              # CLI — backup manuel d'un équipement
-├── version.py               # Version de l'application (source de vérité)
-├── requirements.txt
-├── .env.example             # Template de configuration (sans secrets)
-│
-├── api/                     # Interface web & API REST (FastAPI)
-│   ├── main.py              # Initialisation de l'app, middlewares
-│   ├── routes.py            # Endpoints HTML et JSON
-│   └── templates/           # Templates Jinja2
-│       ├── base.html        # Layout commun (header, footer, thème)
-│       ├── index.html       # Dashboard — liste des équipements
-│       ├── device.html      # Détail d'un équipement + snapshots
-│       ├── snapshot_view.html
-│       ├── scan.html        # Formulaire de scan
-│       ├── audit.html       # Journal d'audit
-│       ├── users.html       # Gestion des utilisateurs
-│       └── login.html
-│
-├── core/
-│   └── detector.py          # Détection automatique du vendor via SSH
-│
-├── collectors/
-│   └── fetcher.py           # Récupération de la config par vendor
-│
-├── storage/
-│   ├── database.py          # SQLite — équipements & snapshots
-│   ├── credentials.py       # Credentials chiffrés AES-256-GCM
-│   ├── users.py             # Utilisateurs & authentification (bcrypt)
-│   └── audit.py             # Journal d'audit
-│
-├── services/
-│   └── scheduler.py         # Worker de backups automatiques (threading)
-│
-├── deploy/
-│   ├── install.sh           # Script d'installation automatisé
-│   └── nodesnap-web.service # Template du service systemd
-│
-├── CHANGELOG.md             # Historique des versions
-└── README.md
-```
-
-## ✨ Fonctionnalités
-
-- 🔍 Détection automatique du vendor via SSH (Netmiko)
-- 🌐 Vendors supportés : Fortinet, Aruba CX, Aruba ProCurve, HP Comware, Palo Alto, Cisco IOS
-- 🗄️ Stockage SQLite avec déduplication par SHA-256
-- 🖥️ Interface web (FastAPI + Jinja2) : dashboard, scan, visualisation de snapshots
-- 🌗 Thème dark / light avec mémorisation par cookie
-- ⏱️ Scheduler de backups automatiques avec gestion des échecs
-- 🔐 Credentials chiffrés AES-256-GCM
-- 📋 Journal d'audit complet
-- 👥 Gestion multi-utilisateurs avec rôles (admin / user)
-
 ## 📸 Aperçu
 
 > Interface disponible en thème **dark** et **light** — bascule en un clic depuis la barre de navigation.
@@ -180,6 +123,63 @@ Gestion multi-utilisateurs avec rôles admin / user, création, modification et 
 Documentation Swagger interactive accessible sur `/api/docs` — tous les endpoints REST sont explorables et testables directement.
 
 ---
+
+## 🗂️ Arborescence
+
+```
+NodeSnap/
+├── nodesnap.py              # CLI — backup manuel d'un équipement
+├── version.py               # Version de l'application (source de vérité)
+├── requirements.txt
+├── .env.example             # Template de configuration (sans secrets)
+│
+├── api/                     # Interface web & API REST (FastAPI)
+│   ├── main.py              # Initialisation de l'app, middlewares
+│   ├── routes.py            # Endpoints HTML et JSON
+│   └── templates/           # Templates Jinja2
+│       ├── base.html        # Layout commun (header, footer, thème)
+│       ├── index.html       # Dashboard — liste des équipements
+│       ├── device.html      # Détail d'un équipement + snapshots
+│       ├── snapshot_view.html
+│       ├── scan.html        # Formulaire de scan
+│       ├── audit.html       # Journal d'audit
+│       ├── users.html       # Gestion des utilisateurs
+│       └── login.html
+│
+├── core/
+│   └── detector.py          # Détection automatique du vendor via SSH
+│
+├── collectors/
+│   └── fetcher.py           # Récupération de la config par vendor
+│
+├── storage/
+│   ├── database.py          # SQLite — équipements & snapshots
+│   ├── credentials.py       # Credentials chiffrés AES-256-GCM
+│   ├── users.py             # Utilisateurs & authentification (bcrypt)
+│   └── audit.py             # Journal d'audit
+│
+├── services/
+│   └── scheduler.py         # Worker de backups automatiques (threading)
+│
+├── deploy/
+│   ├── install.sh           # Script d'installation automatisé
+│   └── nodesnap-web.service # Template du service systemd
+│
+├── CHANGELOG.md             # Historique des versions
+└── README.md
+```
+
+## ✨ Fonctionnalités
+
+- 🔍 Détection automatique du vendor via SSH (Netmiko)
+- 🌐 Vendors supportés : Fortinet, Aruba CX, Aruba ProCurve, HP Comware, Palo Alto, Cisco IOS
+- 🗄️ Stockage SQLite avec déduplication par SHA-256
+- 🖥️ Interface web (FastAPI + Jinja2) : dashboard, scan, visualisation de snapshots
+- 🌗 Thème dark / light avec mémorisation par cookie
+- ⏱️ Scheduler de backups automatiques avec gestion des échecs
+- 🔐 Credentials chiffrés AES-256-GCM
+- 📋 Journal d'audit complet
+- 👥 Gestion multi-utilisateurs avec rôles (admin / user)
 
 ## ⚙️ Installation
 
