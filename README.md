@@ -3,6 +3,44 @@
 Outil de sauvegarde de configurations d'équipements réseau multi-vendor.  
 Stocke les snapshots en SQLite, détecte les changements, et expose une interface web ainsi qu'une API REST.
 
+## Arborescence
+
+```
+NodeSnap/
+├── nodesnap.py              # CLI — backup manuel d'un équipement
+├── version.py               # Version de l'application (source de vérité)
+├── requirements.txt
+├── .env.example             # Template de configuration (sans secrets)
+│
+├── api/                     # Interface web & API REST (FastAPI)
+│   ├── main.py              # Initialisation de l'app, middlewares
+│   ├── routes.py            # Endpoints HTML et JSON
+│   └── templates/           # Templates Jinja2
+│       ├── base.html        # Layout commun (header, footer, thème)
+│       ├── index.html       # Dashboard — liste des équipements
+│       ├── device.html      # Détail d'un équipement + snapshots
+│       ├── snapshot_view.html
+│       ├── scan.html        # Formulaire de scan
+│       ├── audit.html       # Journal d'audit
+│       ├── users.html       # Gestion des utilisateurs
+│       └── login.html
+│
+├── core/
+│   └── detector.py          # Détection automatique du vendor via SSH
+│
+├── collectors/
+│   └── fetcher.py           # Récupération de la config par vendor
+│
+├── storage/
+│   ├── database.py          # SQLite — équipements & snapshots
+│   ├── credentials.py       # Credentials chiffrés AES-256-GCM
+│   ├── users.py             # Utilisateurs & authentification (bcrypt)
+│   └── audit.py             # Journal d'audit
+│
+└── services/
+    └── scheduler.py         # Worker de backups automatiques (threading)
+```
+
 ## Fonctionnalités
 
 - Détection automatique du vendor via SSH (Netmiko)
