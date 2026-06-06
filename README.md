@@ -57,6 +57,22 @@ python -m storage.users create admin admin
 ./nodesnap.py 192.168.1.1 admin --common-name "Switch cœur"
 ```
 
+## Commandes utiles (production)
+
+```bash
+nodesnap-env                          # Activer le venv Python
+
+sudo systemctl status nodesnap-web    # État du service web
+sudo systemctl start nodesnap-web     # Démarrer le service web
+sudo systemctl stop nodesnap-web      # Arrêter le service web
+sudo systemctl restart nodesnap-web   # Redémarrer le service web
+
+journalctl -u nodesnap-web -f         # Logs en temps réel
+journalctl -u nodesnap-web -n 50      # 50 dernières lignes de log
+
+./nodesnap.py <ip> <user>             # Backup manuel d'un équipement
+```
+
 ## Versioning
 
 La version courante est définie dans [`version.py`](version.py) et affichée dans le footer de l'interface web.  
