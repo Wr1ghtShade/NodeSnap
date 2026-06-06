@@ -12,6 +12,10 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from storage.database import init_db
 from storage.users import init_users_table
+
+# Assure que la racine du projet est dans sys.path (nécessaire pour uvicorn)
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent))
 from version import __version__
 
 # Configuration globale du logging : tous les loggers nodesnap.* propagent vers stdout
