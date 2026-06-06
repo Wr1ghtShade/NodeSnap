@@ -179,7 +179,8 @@ NodeSnap/
 - ⏱️ Scheduler de backups automatiques avec gestion des échecs
 - 🔐 Credentials chiffrés AES-256-GCM
 - 📋 Journal d'audit complet
-- 👥 Gestion multi-utilisateurs avec rôles (admin / user)
+- 👥 Gestion multi-utilisateurs avec rôles (admin = écriture, user = lecture seule)
+- 🛡️ Protection CSRF, rate limit du login, headers HTTP de sécurité (CSP, X-Frame-Options…)
 
 ## ⚙️ Installation
 
@@ -202,6 +203,7 @@ Variables disponibles dans `.env` :
 | `SESSION_SECRET` | Clé de signature des sessions web (obligatoire en prod) |
 | `NODESNAP_MASTER_KEY` | Clé AES-256 pour les credentials (générée automatiquement si absente) |
 | `TRUSTED_PROXY` | Mettre à `1` si l'app est derrière un reverse-proxy (active X-Forwarded-For) |
+| `HTTPS_ONLY` | Mettre à `1` quand l'app est servie en HTTPS — marque le cookie de session `Secure` |
 
 ## 🚀 Utilisation
 
@@ -216,6 +218,13 @@ Créer le premier utilisateur admin (le mot de passe est demandé en interactif)
 ```bash
 python -m storage.users create <username> admin
 ```
+
+### 🔐 Rôles
+
+| Rôle | Lecture (dashboard, snapshots, configs) | Écriture (scan, suppression, planification, users, audit) |
+|---|:---:|:---:|
+| `admin` | ✅ | ✅ |
+| `user` | ✅ | ❌ |
 
 ### ⏱️ Backups automatiques
 
