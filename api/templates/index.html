@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - NodeSnap{% endblock %}
+{% block content %}
+    <h1>Dashboard</h1>
+
+    <div class="stats stats-compact">
+        <div class="stat-card">
+            <div class="label">📡 Équipements</div>
+            <div class="value">{{ stats.devices }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">📸 Snapshots</div>
+            <div class="value">{{ stats.snapshots }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">🏷 Vendors</div>
+            <div class="value">{{ stats.vendors }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">🕒 Dernier backup</div>
+            <div class="value time">{{ stats.last_backup or '—' }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">⚡ Backups 24h</div>
+            <div class="value">{{ stats.backups_24h }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">💾 Taille BDD</div>
+            <div class="value size">
+                {%- if stats.total_bytes < 1024 -%}
+                    {{ stats.total_bytes }} o
+                {%- elif stats.total_bytes < 1048576 -%}
+                    {{ "%.1f"|format(stats.total_bytes / 1024) }} Ko
+                {%- else -%}
+                    {{ "%.2f"|format(stats.total_bytes / 1048576) }} Mo
+                {%- endif -%}
+            </div>
+        </div>
+    </div>
+
+<style>
+    .stats-compact {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
+        gap: 0.75rem !important;
+    }
+    .stats-compact .stat-card {
+        padding: 0.85rem 1rem !important;
+    }
+    .stats-compact .stat-card .label {
+        font-size: 0.72rem;
+    }
+    .stats-compact .stat-card .value {
+        font-size: 1.6rem;
+        margin-top: 0.15rem;
+    }
+    .stats-compact .stat-card .value.time {
+        font-size: 0.85rem;
+        font-family: "SF Mono", Monaco, monospace;
+        font-weight: 500;
+        color: var(--text);
+        margin-top: 0.4rem;
+    }
+    .stats-compact .stat-card .value.size {
+        font-size: 1.2rem;
+    }
+</style>
+
+    <h2>Équipements enregistrés</h2>
+
+    {% if devices %}
+    <table>
+        <thead>
+            <tr>
+                <th>Nom personnalisé</th>
+                <th>Hostname</th>
+                <th>Adresse IP</th>
+                <th>Vendor</th>
+                <th>Localisation</th>
+                <th style="text-align: center;">Planning</th>
+                <th style="text-align: center;">Snapshots</th>
+                <th>Dernier backup</th>
+                <th style="width: 80px; text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in devices %}
+            <tr id="device-row-{{ d.id }}">
+                <td>
+                    {% if d.common_name %}
+                        <a href="/devices/{{ d.id }}"><strong>{{ d.common_name }}</strong></a>
+                    {% else %}
+                        <span style="color: var(--text-dim);">—</span>
+                    {% endif %}
+                </td>
+                <td><a href="/devices/{{ d.id }}">{{ d.hostname }}</a></td>
+                <td><code>{{ d.ip_address }}</code></td>
+                <td><span class="badge {{ d.vendor }}">{{ d.vendor }}</span></td>
+                <td>
+                    {% if d.location %}
+                        📍 {{ d.location }}
+                    {% else %}
+                        <span style="color: var(--text-dim);">—</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    {% if d.schedule_enabled %}
+                        {% if d.schedule_last_status == 'failed' %}
+                            <span class="sched-icon failed" title="Dernier scan: échec">⚠</span>
+                        {% else %}
+                            <span class="sched-icon active" title="Planifié toutes les {{ d.schedule_interval_minutes }} min">⏱</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="sched-icon off" title="Non planifié">—</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">{{ d.snapshot_count }}</td>
+                <td>{{ d.last_backup or '—' }}</td>
+                <td style="text-align: center;">
+                    <button class="btn-delete"
+                            data-id="{{ d.id }}"
+                            data-name="{{ d.common_name or d.hostname }}"
+                            title="Supprimer cet équipement">
+                        🗑
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+        <div class="icon">📡</div>
+        <p>Aucun équipement enregistré pour le moment.</p>
+        <p style="margin-top: 0.5rem; font-size: 0.9rem;">
+            Lance un backup avec <code>./nodesnap.py &lt;ip&gt; &lt;user&gt;</code> ou via <a href="/scan" style="color: var(--accent);">l'interface Add</a>.
+        </p>
+    </div>
+    {% endif %}
+
+<style>
+    
+    .sched-icon {
+        font-size: 1.05rem;
+        display: inline-block;
+    }
+    .sched-icon.active { color: var(--green); }
+    .sched-icon.failed { color: var(--red); animation: pulse 1.5s ease-in-out infinite; }
+    .sched-icon.off { color: var(--text-dim); opacity: 0.4; }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.45; }
+    }
+
+    .btn-delete {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        padding: 0.35rem 0.6rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.15s;
+    }
+    .btn-delete:hover {
+        border-color: var(--red);
+        color: var(--red);
+        background: rgba(248, 81, 73, 0.1);
+    }
+    .btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Modale */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 2rem;
+        max-width: 480px;
+        width: 90%;
+    }
+    .modal h3 { margin: 0 0 1rem; color: var(--red); font-size: 1.2rem; }
+    .modal p { color: var(--text-dim); margin-bottom: 0.5rem; }
+    .modal p strong { color: var(--text); }
+    .modal-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        margin-top: 1.5rem;
+    }
+    .btn-danger {
+        background: var(--red);
+        color: white;
+        border: none;
+        padding: 0.55rem 1.1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    .btn-danger:hover { background: #da3633; }
+    .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+
+<div class="modal-overlay" id="confirm-modal">
+    <div class="modal">
+        <h3>⚠ Confirmer la suppression</h3>
+        <p>Tu es sur le point de supprimer définitivement l'équipement :</p>
+        <p><strong id="modal-device-name"></strong></p>
+        <p style="margin-top: 1rem; font-size: 0.85rem;">
+            Tous ses snapshots de configuration seront également supprimés.
+            <strong style="color: var(--red);">Cette action est irréversible.</strong>
+        </p>
+        <div class="modal-actions">
+            <button class="btn secondary" id="modal-cancel">Annuler</button>
+            <button class="btn-danger" id="modal-confirm">Supprimer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const modal = document.getElementById('confirm-modal');
+    const modalName = document.getElementById('modal-device-name');
+    const modalCancel = document.getElementById('modal-cancel');
+    const modalConfirm = document.getElementById('modal-confirm');
+    let pendingDeviceId = null;
+
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', () => {
+            pendingDeviceId = btn.dataset.id;
+            modalName.textContent = btn.dataset.name + ' (ID #' + btn.dataset.id + ')';
+            modal.classList.add('show');
+        });
+    });
+
+    modalCancel.addEventListener('click', () => {
+        modal.classList.remove('show');
+        pendingDeviceId = null;
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('show');
+            pendingDeviceId = null;
+        }
+    });
+
+    modalConfirm.addEventListener('click', async () => {
+        if (!pendingDeviceId) return;
+        modalConfirm.disabled = true;
+        modalConfirm.textContent = 'Suppression...';
+        try {
+            const response = await fetch('/api/devices/' + pendingDeviceId, { method: 'DELETE' });
+            const data = await response.json();
+            if (response.ok && data.success) {
+                const row = document.getElementById('device-row-' + pendingDeviceId);
+                if (row) {
+                    row.style.transition = 'opacity 0.3s';
+                    row.style.opacity = '0';
+                    setTimeout(() => location.reload(), 300);
+                } else {
+                    location.reload();
+                }
+            } else {
+                nsToast.error('Erreur : ' + (data.error || data.detail || 'suppression échouée'));
+                modalConfirm.disabled = false;
+                modalConfirm.textContent = 'Supprimer';
+            }
+        } catch (err) {
+            nsToast.error('Erreur réseau : ' + err.message);
+            modalConfirm.disabled = false;
+            modalConfirm.textContent = 'Supprimer';
+        }
+    });
+</script>
+{% endblock %}

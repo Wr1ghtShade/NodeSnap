@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+{% block title %}{{ device.common_name or device.hostname }} - NodeSnap{% endblock %}
+{% block content %}
+    <a href="/" class="btn secondary" style="margin-bottom: 1rem;">← Retour</a>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1 style="margin-bottom: 0.25rem;">
+                {% if device.common_name %}
+                    {{ device.common_name }}
+                {% else %}
+                    {{ device.hostname }}
+                {% endif %}
+            </h1>
+            {% if device.common_name %}
+            <p style="color: var(--text-dim); margin: 0; font-size: 0.9rem;">
+                Hostname : <code>{{ device.hostname }}</code>
+            </p>
+            {% endif %}
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn secondary" id="btn-edit">✎ Modifier</button>
+            <form method="post" action="/devices/{{ device.id }}/delete" style="display: inline;"
+                  onsubmit="return confirm('Supprimer définitivement {{ device.common_name or device.hostname }} et TOUS ses snapshots ?\n\nCette action est irréversible.');">
+                <button type="submit" class="btn danger">🗑 Supprimer équipement</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="label">IP</div>
+            <div class="value" style="font-size: 1.3rem;">{{ device.ip_address }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Vendor</div>
+            <div class="value" style="font-size: 1.3rem;">
+                <span class="badge {{ device.vendor }}">{{ device.vendor }}</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Localisation</div>
+            <div class="value" style="font-size: 1rem;">
+                {% if device.location %}
+                    📍 {{ device.location }}
+                {% else %}
+                    <span style="color: var(--text-dim);">—</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="label">First seen</div>
+            <div class="value" style="font-size: 0.95rem;">{{ device.first_seen }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Last seen</div>
+            <div class="value" style="font-size: 0.95rem;">{{ device.last_seen }}</div>
+        </div>
+    </div>
+
+    {% if device.comment %}
+    <div class="comment-card">
+        <div class="comment-label">💬 Commentaire</div>
+        <div class="comment-body">{{ device.comment }}</div>
+    </div>
+    {% endif %}
+
+    
+    <!-- ============ Carte Planification ============ -->
+    <div class="schedule-card">
+        <div class="schedule-header">
+            <div class="schedule-title">⏱ Planification automatique</div>
+            <span id="sched-status" class="sched-status {% if device.schedule_enabled %}active{% else %}inactive{% endif %}">
+                {% if device.schedule_enabled %}● Active{% else %}○ Inactive{% endif %}
+            </span>
+        </div>
+
+        <div class="schedule-grid">
+            <div class="schedule-field">
+                <label>Username SSH</label>
+                <input type="text" id="sched-username" value="{{ ssh_username }}" placeholder="admin" autocomplete="off">
+            </div>
+            <div class="schedule-field">
+                <label>Mot de passe SSH {% if has_credentials %}<span class="hint-stored">(stocké chiffré)</span>{% endif %}</label>
+                <input type="password" id="sched-password" placeholder="{% if has_credentials %}laisser vide pour conserver{% else %}requis{% endif %}" autocomplete="new-password">
+            </div>
+            <div class="schedule-field">
+                <label>Intervalle</label>
+                <select id="sched-interval">
+                    <option value="15">Toutes les 15 minutes</option>
+                    <option value="30">Toutes les 30 minutes</option>
+                    <option value="60" selected>Toutes les heures</option>
+                    <option value="180">Toutes les 3 heures</option>
+                    <option value="360">Toutes les 6 heures</option>
+                    <option value="720">Toutes les 12 heures</option>
+                    <option value="1440">Tous les jours</option>
+                    <option value="10080">Toutes les semaines</option>
+                </select>
+            </div>
+            <div class="schedule-field">
+                <label>Activer</label>
+                <label class="switch">
+                    <input type="checkbox" id="sched-enabled" {% if device.schedule_enabled %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="schedule-meta">
+            <div><span class="k">Dernier run</span><span class="v">{{ device.schedule_last_run or '—' }}</span></div>
+            <div><span class="k">Prochain run</span><span class="v">{{ device.schedule_next_run or '—' }}</span></div>
+            <div><span class="k">Dernier statut</span>
+                <span class="v">
+                {% if device.schedule_last_status == 'success' %}<span style="color: var(--green);">✓ success</span>
+                {% elif device.schedule_last_status == 'failed' %}<span style="color: var(--red);">✗ failed</span>
+                {% else %}—{% endif %}
+                </span>
+            </div>
+            <div><span class="k">Échecs consécutifs</span><span class="v">{{ device.schedule_fail_count or 0 }} / 3</span></div>
+        </div>
+
+        <div class="schedule-actions">
+            <button class="btn" id="sched-save">💾 Enregistrer</button>
+            <button class="btn secondary" id="sched-runnow" {% if not has_credentials %}disabled title="Enregistre d'abord des credentials"{% endif %}>▶ Lancer maintenant</button>
+            {% if has_credentials %}
+            <button class="btn danger" id="sched-purge">🗑 Effacer credentials</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <style>
+        .schedule-card {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+        .schedule-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .schedule-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+        .sched-status {
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
+            border-radius: 12px;
+        }
+        .sched-status.active {
+            color: var(--green);
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid var(--green);
+        }
+        .sched-status.inactive {
+            color: var(--text-dim);
+            background: var(--bg);
+            border: 1px solid var(--border);
+        }
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .schedule-field { display: flex; flex-direction: column; }
+        .schedule-field label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+            margin-bottom: 0.35rem;
+        }
+        .schedule-field input,
+        .schedule-field select {
+            padding: 0.55rem 0.7rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.88rem;
+            font-family: inherit;
+        }
+        .schedule-field input:focus,
+        .schedule-field select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .hint-stored {
+            color: var(--green);
+            font-size: 0.7rem;
+            text-transform: none;
+            font-weight: normal;
+            letter-spacing: 0;
+            margin-left: 0.3rem;
+        }
+        /* Toggle switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            margin-top: 0.3rem;
+        }
+        .switch input { display: none; }
+        .switch .slider {
+            position: absolute;
+            inset: 0;
+            background: var(--border);
+            border-radius: 24px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .switch .slider::before {
+            content: "";
+            position: absolute;
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            top: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .switch input:checked + .slider { background: var(--green); }
+        .switch input:checked + .slider::before { transform: translateX(20px); }
+        .schedule-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            background: var(--bg);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.82rem;
+        }
+        .schedule-meta .k {
+            display: block;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+            margin-bottom: 0.2rem;
+        }
+        .schedule-meta .v {
+            color: var(--text);
+            font-family: "SF Mono", Monaco, monospace;
+            font-size: 0.8rem;
+        }
+        .schedule-actions {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+        .schedule-actions button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+
+    <script>
+    (function() {
+        const deviceId = {{ device.id }};
+        const saveBtn  = document.getElementById('sched-save');
+        const runBtn   = document.getElementById('sched-runnow');
+        const purgeBtn = document.getElementById('sched-purge');
+
+        async function postForm(url, data, method) {
+            const fd = new FormData();
+            for (const k in data) fd.append(k, data[k]);
+            const opts = { method: method || 'POST' };
+            if (method !== 'DELETE') opts.body = fd;
+            const res = await fetch(url, opts);
+            return { ok: res.ok, data: await res.json() };
+        }
+
+        saveBtn.addEventListener('click', async () => {
+            const username = document.getElementById('sched-username').value.trim();
+            const password = document.getElementById('sched-password').value;
+            const interval = parseInt(document.getElementById('sched-interval').value, 10);
+            const enabled  = document.getElementById('sched-enabled').checked ? 1 : 0;
+
+            if (!username) { nsToast.warning('Username SSH requis.'); return; }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Enregistrement...';
+
+            try {
+                // 1. Stocker les credentials uniquement si un mot de passe est saisi
+                if (password) {
+                    const r = await postForm('/api/devices/' + deviceId + '/credentials',
+                                             { username, password });
+                    if (!r.ok || !r.data.success) throw new Error(r.data.error || 'credentials');
+                }
+                // 2. Activer la planification
+                const r2 = await postForm('/api/devices/' + deviceId + '/schedule',
+                                          { enabled, interval_minutes: interval });
+                if (!r2.ok || !r2.data.success) throw new Error(r2.data.error || 'schedule');
+                location.reload();
+            } catch (err) {
+                nsToast.error('Erreur : ' + err.message);
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Enregistrer';
+            }
+        });
+
+        runBtn.addEventListener('click', async () => {
+            
+            runBtn.disabled = true;
+            runBtn.textContent = 'Demande en cours...';
+            try {
+                const r = await postForm('/api/devices/' + deviceId + '/run-now', {});
+                if (r.ok && r.data.success) {
+                    nsToast.success(r.data.message || 'Run programmé.');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    nsToast.error('Erreur : ' + (r.data.error || 'inconnue'));
+                    runBtn.disabled = false;
+                    runBtn.textContent = '▶ Lancer maintenant';
+                }
+            } catch (err) {
+                nsToast.error('Erreur réseau : ' + err.message);
+                runBtn.disabled = false;
+                runBtn.textContent = '▶ Lancer maintenant';
+            }
+        });
+
+        if (purgeBtn) {
+            purgeBtn.addEventListener('click', async () => {
+                if (!confirm('Effacer les credentials stockés ?\n\nLa planification sera désactivée automatiquement.')) return;
+                try {
+                    const r = await postForm('/api/devices/' + deviceId + '/credentials', {}, 'DELETE');
+                    if (r.ok && r.data.success) location.reload();
+                    else nsToast.error('Erreur : ' + (r.data.error || 'inconnue'));
+                } catch (err) {
+                    nsToast.error('Erreur réseau : ' + err.message);
+                }
+            });
+        }
+
+        // Présélectionner l'intervalle stocké
+        {% if device.schedule_interval_minutes %}
+        const sel = document.getElementById('sched-interval');
+        for (const opt of sel.options) {
+            if (parseInt(opt.value, 10) === {{ device.schedule_interval_minutes }}) {
+                opt.selected = true; break;
+            }
+        }
+        {% endif %}
+    })();
+    </script>
+
+    <h2>Historique des snapshots</h2>
+    {% if snapshots %}
+    <table class="snapshots-table">
+        <thead>
+            <tr>
+                <th style="width: 60px;  text-align: center;">ID</th>
+                <th style="width: 180px; text-align: center;">Date</th>
+                <th style="width: 90px;  text-align: center;">Taille</th>
+                <th style="text-align: center;">SHA256</th>
+                <th style="text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in snapshots %}
+            <tr>
+                <td>#{{ s.id }}</td>
+                <td>{{ s.created_at }}</td>
+                <td>{{ s.size_bytes }} o</td>
+                <td><code title="{{ s.sha256 }}">{{ s.sha256 }}</code></td>
+                <td>
+                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
+                        <a href="/devices/{{ device.id }}/snapshots/{{ s.id }}" class="btn secondary">Voir</a>
+                        <a href="/api/snapshots/{{ s.id }}/download.txt" class="btn secondary">.txt</a>
+                        <a href="/api/snapshots/{{ s.id }}/download.json" class="btn secondary">.json</a>
+                        <form method="post" action="/devices/{{ device.id }}/snapshots/{{ s.id }}/delete" style="display: inline;"
+                              onsubmit="return confirm('Supprimer le snapshot #{{ s.id }} ?');">
+                            <button type="submit" class="btn danger icon-only">🗑</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <style>
+        .snapshots-table td code {
+            font-size: 0.78rem;
+            word-break: break-all;
+            display: inline-block;
+            line-height: 1.3;
+        }
+    </style>
+    {% else %}
+    <div class="empty">
+        <div class="icon">📭</div>
+        <p>Aucun snapshot pour cet équipement.</p>
+        <p style="margin-top: 1rem;">
+            <a href="/devices/{{ device.id }}/rescan" class="btn">↻ Lancer un premier scan</a>
+        </p>
+    </div>
+    {% endif %}
+
+<!-- ============ Styles carte commentaire + modale d'édition ============ -->
+<style>
+    .comment-card {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--purple);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow);
+    }
+    .comment-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+    .comment-body {
+        color: var(--text);
+        font-size: 0.95rem;
+        white-space: pre-wrap;
+        line-height: 1.5;
+    }
+    /* Modale édition */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 2rem;
+        max-width: 560px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .modal h3 {
+        margin: 0 0 1.25rem;
+        color: var(--accent);
+        font-size: 1.2rem;
+    }
+    .modal .form-group { margin-bottom: 1rem; }
+    .modal .form-group label {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: var(--text-dim);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .modal .form-group input,
+    .modal .form-group textarea {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.95rem;
+        font-family: inherit;
+    }
+    .modal .form-group textarea {
+        min-height: 90px;
+        resize: vertical;
+    }
+    .modal .form-group input:focus,
+    .modal .form-group textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .modal-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        margin-top: 1.5rem;
+    }
+    .modal-error {
+        background: rgba(207, 34, 46, 0.1);
+        border: 1px solid var(--red);
+        color: var(--red);
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        display: none;
+    }
+    .modal-error.show { display: block; }
+    .field-hint {
+        display: block;
+        margin-top: 0.3rem;
+        color: var(--text-dim);
+        font-size: 0.78rem;
+    }
+</style>
+
+<div class="modal-overlay" id="modal-edit">
+    <div class="modal">
+        <h3>✎ Modifier l'équipement</h3>
+        <div class="modal-error" id="edit-error"></div>
+        <form id="form-edit">
+            <div class="form-group">
+                <label for="e-common-name">Nom personnalisé</label>
+                <input type="text" id="e-common-name" name="common_name"
+                       value="{{ device.common_name or '' }}"
+                       placeholder="Ex: Firewall Prod Paris" autocomplete="off">
+                <span class="field-hint">Affiché en priorité dans le dashboard. Laisse vide pour utiliser le hostname.</span>
+            </div>
+            <div class="form-group">
+                <label for="e-location">Localisation</label>
+                <input type="text" id="e-location" name="location"
+                       value="{{ device.location or '' }}"
+                       placeholder="Ex: DC Paris - Salle A / Baie 12" autocomplete="off">
+                <span class="field-hint">Lieu physique de l'équipement.</span>
+            </div>
+            <div class="form-group">
+                <label for="e-comment">Commentaire</label>
+                <textarea id="e-comment" name="comment"
+                          placeholder="Ex: Switch cœur de réseau, redondé avec SW02. Maintenance le 1er mardi du mois.">{{ device.comment or '' }}</textarea>
+                <span class="field-hint">Notes libres visibles sur la fiche de l'équipement.</span>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn secondary" id="edit-cancel">Annuler</button>
+                <button type="submit" class="btn">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const editModal   = document.getElementById('modal-edit');
+    const editBtn     = document.getElementById('btn-edit');
+    const editCancel  = document.getElementById('edit-cancel');
+    const editForm    = document.getElementById('form-edit');
+    const editError   = document.getElementById('edit-error');
+
+    function showEditError(msg) {
+        editError.textContent = '⚠ ' + msg;
+        editError.classList.add('show');
+    }
+    function hideEditError() { editError.classList.remove('show'); }
+
+    editBtn.addEventListener('click', () => {
+        hideEditError();
+        editModal.classList.add('show');
+    });
+    editCancel.addEventListener('click', () => editModal.classList.remove('show'));
+    editModal.addEventListener('click', (e) => {
+        if (e.target === editModal) editModal.classList.remove('show');
+    });
+
+    editForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideEditError();
+        const fd = new FormData();
+        fd.append('common_name', document.getElementById('e-common-name').value);
+        fd.append('location',    document.getElementById('e-location').value);
+        fd.append('comment',     document.getElementById('e-comment').value);
+        try {
+            const res = await fetch('/api/devices/{{ device.id }}/metadata', {
+                method: 'POST',
+                body: fd,
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                location.reload();
+            } else {
+                showEditError(data.error || data.detail || 'Erreur de mise à jour');
+            }
+        } catch (err) {
+            showEditError('Erreur réseau : ' + err.message);
+        }
+    });
+</script>
+{% endblock %}

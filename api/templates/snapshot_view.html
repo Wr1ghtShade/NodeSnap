@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+{% block title %}Snapshot #{{ snapshot.id }} - {{ device.common_name or device.hostname }}{% endblock %}
+{% block content %}
+<style>
+    .snap-header {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px 8px 0 0;
+        padding: 1rem 1.25rem;
+        box-shadow: var(--shadow);
+        border-bottom: none;
+    }
+    .snap-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        margin-bottom: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .snap-breadcrumb a { color: var(--accent); text-decoration: none; }
+    .snap-breadcrumb a:hover { text-decoration: underline; }
+    .snap-breadcrumb .sep { opacity: 0.5; }
+    .snap-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .snap-title h1 {
+        margin: 0;
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .snap-id {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        padding: 0.15rem 0.6rem;
+        border-radius: 4px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 0.85rem;
+        color: var(--purple);
+    }
+    .snap-meta {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        font-size: 0.82rem;
+        color: var(--text-dim);
+    }
+    .snap-meta .k {
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-size: 0.7rem;
+        margin-right: 0.3rem;
+    }
+    .snap-meta .v {
+        color: var(--text);
+        font-family: "SF Mono", Monaco, monospace;
+    }
+    .snap-meta .v code { font-size: 0.78rem; }
+    .snap-actions {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        padding: 0.6rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .snap-actions .spacer { flex: 1; }
+    .snap-nav {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+    }
+    .snap-nav .pos {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 0.78rem;
+    }
+    .icon-btn-sm {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        width: 28px;
+        height: 28px;
+        border-radius: 5px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        padding: 0;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+    .icon-btn-sm:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: var(--bg-hover);
+    }
+    .icon-btn-sm.disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    .search-box {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0.1rem 0.5rem;
+    }
+    .search-box input {
+        background: transparent;
+        border: none;
+        color: var(--text);
+        font-size: 0.8rem;
+        font-family: inherit;
+        padding: 0.3rem 0;
+        width: 180px;
+    }
+    .search-box input:focus { outline: none; }
+    .search-box .count {
+        font-size: 0.72rem;
+        color: var(--text-dim);
+        font-family: "SF Mono", Monaco, monospace;
+        white-space: nowrap;
+    }
+    .code-viewer {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 0 0 8px 8px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+    .code-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: "SF Mono", "Cascadia Code", Monaco, "Courier New", monospace;
+        font-size: 0.82rem;
+        line-height: 1.55;
+        background: var(--bg);
+    }
+    .code-table td {
+        padding: 0 !important;
+        vertical-align: top;
+        border: none !important;
+        background: transparent !important;
+    }
+    .code-table tr:hover td { background: transparent !important; }
+    .code-table tr:hover .ln { color: var(--text); }
+    .code-table tr:hover .code { background: var(--bg-hover); }
+    .code-table .ln {
+        width: 1%;
+        white-space: nowrap;
+        padding: 0 1rem 0 1rem !important;
+        text-align: right;
+        color: var(--text-dim);
+        user-select: none;
+        border-right: 1px solid var(--border) !important;
+        font-size: 0.75rem;
+        opacity: 0.6;
+    }
+    .code-table .ln a { color: inherit; text-decoration: none; }
+    .code-table .code {
+        padding: 0 1rem !important;
+        white-space: pre;
+        color: var(--text);
+    }
+    .code-viewer.wrap .code-table .code {
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .code-table tr:target .code {
+        background: rgba(188, 140, 255, 0.15) !important;
+        box-shadow: inset 3px 0 0 var(--purple);
+    }
+    .tok-comment  { color: var(--text-dim); font-style: italic; }
+    .tok-section  { color: var(--accent);   font-weight: 600; }
+    .tok-keyword  { color: var(--purple);   font-weight: 600; }
+    .tok-string   { color: #a5d6ff; }
+    .tok-number   { color: #79c0ff; }
+    .tok-ip       { color: #ffa657; font-weight: 500; }
+    :root[data-theme="light"] .tok-string { color: #0a3069; }
+    :root[data-theme="light"] .tok-number { color: #0550ae; }
+    :root[data-theme="light"] .tok-ip     { color: #bc4c00; }
+    .search-hit {
+        background: rgba(255, 193, 7, 0.4);
+        border-radius: 2px;
+        outline: 1px solid rgba(255, 193, 7, 0.8);
+    }
+    .search-hit.current {
+        background: rgba(255, 152, 0, 0.7);
+        outline: 2px solid orange;
+    }
+    .copy-toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        background: var(--bg-alt);
+        border: 1px solid var(--green);
+        color: var(--green);
+        padding: 0.75rem 1.25rem;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.25s;
+        z-index: 1000;
+    }
+    .copy-toast.show { opacity: 1; transform: translateY(0); }
+</style>
+
+<div class="snap-header">
+    <div class="snap-breadcrumb">
+        <a href="/">Dashboard</a>
+        <span class="sep">/</span>
+        <a href="/devices/{{ device.id }}">{{ device.common_name or device.hostname }}</a>
+        <span class="sep">/</span>
+        <span>Snapshot #{{ snapshot.id }}</span>
+    </div>
+    <div class="snap-title">
+        <h1>
+            📄 Configuration
+            <span class="snap-id">#{{ snapshot.id }}</span>
+        </h1>
+        <span class="badge {{ device.vendor }}">{{ device.vendor }}</span>
+    </div>
+    <div class="snap-meta">
+        <div><span class="k">Date</span><span class="v">{{ snapshot.created_at }}</span></div>
+        <div><span class="k">Taille</span><span class="v">{{ snapshot.size_bytes }} o</span></div>
+        <div><span class="k">Lignes</span><span class="v" id="line-count">…</span></div>
+        <div><span class="k">SHA256</span><span class="v"><code title="{{ snapshot.sha256 }}">{{ snapshot.sha256[:24] }}…</code></span></div>
+    </div>
+</div>
+
+<div class="snap-actions">
+    <div class="search-box">
+        <span style="color: var(--text-dim); font-size: 0.8rem;">🔍</span>
+        <input type="text" id="search-input" placeholder="Rechercher dans la config...">
+        <span class="count" id="search-count"></span>
+    </div>
+    <button class="icon-btn-sm" id="btn-prev-hit" title="Résultat précédent (Shift+Enter)">↑</button>
+    <button class="icon-btn-sm" id="btn-next-hit" title="Résultat suivant (Enter)">↓</button>
+    <button class="icon-btn-sm" id="btn-wrap" title="Retour à la ligne">⇌</button>
+    <button class="icon-btn-sm" id="btn-copy" title="Copier toute la config">📋</button>
+    <a href="/api/snapshots/{{ snapshot.id }}/download.txt" class="icon-btn-sm" title="Télécharger .txt">⬇</a>
+    <a href="/api/snapshots/{{ snapshot.id }}/download.json" class="icon-btn-sm" title="Télécharger .json">{ }</a>
+
+    <div class="spacer"></div>
+
+    <div class="snap-nav">
+        {% if next_id %}
+        <a href="/devices/{{ device.id }}/snapshots/{{ next_id }}" class="icon-btn-sm" title="Snapshot plus récent">←</a>
+        {% else %}
+        <span class="icon-btn-sm disabled">←</span>
+        {% endif %}
+        <span class="pos">{{ position }} / {{ total }}</span>
+        {% if prev_id %}
+        <a href="/devices/{{ device.id }}/snapshots/{{ prev_id }}" class="icon-btn-sm" title="Snapshot plus ancien">→</a>
+        {% else %}
+        <span class="icon-btn-sm disabled">→</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="code-viewer" id="code-viewer">
+    <table class="code-table" id="code-table">
+        <tbody id="code-body"></tbody>
+    </table>
+</div>
+
+<div class="copy-toast" id="copy-toast">✓ Configuration copiée dans le presse-papier</div>
+
+<script id="raw-config" type="application/json">{{ snapshot.config | tojson }}</script>
+<script>
+(function() {
+    // ============ Tokenizer SAFE ============
+    var rawConfig = JSON.parse(document.getElementById('raw-config').textContent);
+    var tbody = document.getElementById('code-body');
+    var lineCount = document.getElementById('line-count');
+
+    function escapeHtml(s) {
+        return s.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+    }
+
+    var KEYWORDS = {
+        'config':1,'end':1,'next':1,'edit':1,'interface':1,'vlan':1,'hostname':1,
+        'set':1,'no':1,'ip':1,'vrf':1,'spanning-tree':1,'access-list':1,
+        'snmp-server':1,'ntp':1,'ssh':1,'https-server':1,'logging':1,
+        'description':1,'name':1,'vdom':1,'router':1,'firewall':1,'policy':1,
+        'address':1,'service':1,'schedule':1,'shutdown':1,'enable':1,'disable':1,
+        'untagged':1,'tagged':1,'member':1,'exit':1,'vsf':1,'primary-vlan':1,
+        'password':1,'qos':1,'dscp':1,'voice':1,'type':1,'priority':1,'link':1,
+        'default-gateway':1,'community':1,'location':1,'operator':1,'manager':1
+    };
+
+    var IP_RE  = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:\/\d{1,2})?$/;
+    var NUM_RE = /^\d+$/;
+    var WORD_RE = /[\w./-]/;
+
+    function highlightLine(line) {
+        if (line.length === 0) return '\u200B';
+
+        var trimmed = line.replace(/^\s+/, '');
+        if (trimmed.charAt(0) === '#' || trimmed.charAt(0) === '!' || trimmed.charAt(0) === ';') {
+            return '<span class="tok-comment">' + escapeHtml(line) + '</span>';
+        }
+
+        var out = [];
+        var i = 0;
+        var len = line.length;
+
+        while (i < len) {
+            var ch = line.charAt(i);
+
+            // Chaîne entre guillemets
+            if (ch === '"') {
+                var j = i + 1;
+                while (j < len && line.charAt(j) !== '"') j++;
+                var str = line.substring(i, Math.min(j + 1, len));
+                out.push('<span class="tok-string">' + escapeHtml(str) + '</span>');
+                i = j + 1;
+                continue;
+            }
+
+            // Espaces
+            if (ch === ' ' || ch === '\t') {
+                var k = i;
+                while (k < len && (line.charAt(k) === ' ' || line.charAt(k) === '\t')) k++;
+                out.push(escapeHtml(line.substring(i, k)));
+                i = k;
+                continue;
+            }
+
+            // Mot / nombre / IP
+            if (WORD_RE.test(ch)) {
+                var m = i;
+                while (m < len && WORD_RE.test(line.charAt(m))) m++;
+                var tok = line.substring(i, m);
+                if (IP_RE.test(tok)) {
+                    out.push('<span class="tok-ip">' + escapeHtml(tok) + '</span>');
+                } else if (NUM_RE.test(tok)) {
+                    out.push('<span class="tok-number">' + escapeHtml(tok) + '</span>');
+                } else if (KEYWORDS[tok.toLowerCase()]) {
+                    out.push('<span class="tok-keyword">' + escapeHtml(tok) + '</span>');
+                } else {
+                    out.push(escapeHtml(tok));
+                }
+                i = m;
+                continue;
+            }
+
+            // Ponctuation
+            out.push(escapeHtml(ch));
+            i++;
+        }
+        return out.join('');
+    }
+
+    // Split robuste : \r\n, \r, \n
+    var lines = rawConfig.split(/\r\n|\r|\n/);
+    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    lineCount.textContent = lines.length.toLocaleString();
+
+    var frag = document.createDocumentFragment();
+    for (var idx = 0; idx < lines.length; idx++) {
+        var n = idx + 1;
+        var tr = document.createElement('tr');
+        tr.id = 'L' + n;
+        var tdLn = document.createElement('td');
+        tdLn.className = 'ln';
+        tdLn.innerHTML = '<a href="#L' + n + '">' + n + '</a>';
+        var tdCode = document.createElement('td');
+        tdCode.className = 'code';
+        tdCode.innerHTML = highlightLine(lines[idx]);
+        tr.appendChild(tdLn);
+        tr.appendChild(tdCode);
+        frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+
+    // Wrap toggle
+    var viewer = document.getElementById('code-viewer');
+    document.getElementById('btn-wrap').addEventListener('click', function() {
+        viewer.classList.toggle('wrap');
+    });
+
+    // Copy
+    var toast = document.getElementById('copy-toast');
+    document.getElementById('btn-copy').addEventListener('click', function() {
+        navigator.clipboard.writeText(rawConfig).then(function() {
+            toast.classList.add('show');
+            setTimeout(function() { toast.classList.remove('show'); }, 2000);
+        }).catch(function(e) {
+            alert('Impossible de copier : ' + e.message);
+        });
+    });
+
+    // Recherche in-page
+    var searchInput = document.getElementById('search-input');
+    var searchCount = document.getElementById('search-count');
+    var hits = [];
+    var currentHit = -1;
+
+    function clearHighlights() {
+        var nodes = tbody.querySelectorAll('.search-hit');
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var parent = el.parentNode;
+            parent.replaceChild(document.createTextNode(el.textContent), el);
+            parent.normalize();
+        }
+        hits = [];
+        currentHit = -1;
+        searchCount.textContent = '';
+    }
+
+    function doSearch(query) {
+        clearHighlights();
+        if (!query || query.length < 2) return;
+        var escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var regex = new RegExp(escaped, 'gi');
+
+        var cells = tbody.querySelectorAll('td.code');
+        for (var c = 0; c < cells.length; c++) {
+            var td = cells[c];
+            var walker = document.createTreeWalker(td, NodeFilter.SHOW_TEXT, null);
+            var nodes = [];
+            var n;
+            while ((n = walker.nextNode())) nodes.push(n);
+            for (var ni = 0; ni < nodes.length; ni++) {
+                var node = nodes[ni];
+                var text = node.nodeValue;
+                if (!regex.test(text)) continue;
+                regex.lastIndex = 0;
+                var fragH = document.createDocumentFragment();
+                var last = 0, mh;
+                while ((mh = regex.exec(text)) !== null) {
+                    if (mh.index > last) fragH.appendChild(document.createTextNode(text.slice(last, mh.index)));
+                    var span = document.createElement('span');
+                    span.className = 'search-hit';
+                    span.textContent = mh[0];
+                    fragH.appendChild(span);
+                    hits.push(span);
+                    last = mh.index + mh[0].length;
+                }
+                if (last < text.length) fragH.appendChild(document.createTextNode(text.slice(last)));
+                node.parentNode.replaceChild(fragH, node);
+            }
+        }
+
+        searchCount.textContent = hits.length ? '1 / ' + hits.length : '0';
+        if (hits.length > 0) goToHit(0);
+    }
+
+    function goToHit(index) {
+        if (hits.length === 0) return;
+        if (currentHit >= 0 && hits[currentHit]) hits[currentHit].classList.remove('current');
+        currentHit = (index + hits.length) % hits.length;
+        hits[currentHit].classList.add('current');
+        hits[currentHit].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        searchCount.textContent = (currentHit + 1) + ' / ' + hits.length;
+    }
+
+    var searchTimer;
+    searchInput.addEventListener('input', function(e) {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() { doSearch(e.target.value); }, 150);
+    });
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (hits.length > 0) goToHit(currentHit + (e.shiftKey ? -1 : 1));
+        } else if (e.key === 'Escape') {
+            searchInput.value = '';
+            clearHighlights();
+        }
+    });
+    document.getElementById('btn-prev-hit').addEventListener('click', function() { goToHit(currentHit - 1); });
+    document.getElementById('btn-next-hit').addEventListener('click', function() { goToHit(currentHit + 1); });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === '/' && document.activeElement !== searchInput) {
+            e.preventDefault();
+            searchInput.focus();
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+# Secrets & config locale
+.env
+
+# Base de données (données réelles)
+*.db
+*.db-shm
+*.db-wal
+
+# Backups de configs réseau (données sensibles)
+backups/
+
+# Logs runtime
+logs/
+
+# Environnement virtuel Python
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/

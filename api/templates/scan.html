@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Ajouter équipement - NodeSnap{% endblock %}
+{% block content %}
+<style>
+    .form-card {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 2rem;
+        max-width: 100%;
+        box-shadow: var(--shadow);
+    }
+    .form-section {
+        margin-bottom: 1.5rem;
+    }
+    .form-section-title {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .form-group label .optional {
+        color: var(--text-dim);
+        text-transform: none;
+        font-size: 0.75rem;
+        font-weight: normal;
+        letter-spacing: 0;
+        margin-left: 0.4rem;
+        opacity: 0.7;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.95rem;
+        font-family: inherit;
+    }
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .field-hint {
+        display: block;
+        margin-top: 0.3rem;
+        color: var(--text-dim);
+        font-size: 0.78rem;
+    }
+    .form-row { display: flex; gap: 1rem; }
+    .form-row .form-group { flex: 1; }
+    .alert {
+        padding: 1rem;
+        border-radius: 6px;
+        margin: 1.5rem 0;
+        display: none;
+    }
+    .alert.success { background: rgba(63, 185, 80, 0.1); border: 1px solid var(--green); color: var(--green); }
+    .alert.error   { background: rgba(207, 34, 46, 0.1); border: 1px solid var(--red);   color: var(--red); }
+    .alert.info    { background: rgba(88, 166, 255, 0.1); border: 1px solid var(--accent); color: var(--accent-h); }
+    .alert.show { display: block; }
+    .spinner {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .result-card {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+        display: none;
+        box-shadow: var(--shadow);
+    }
+    .result-card.show { display: block; }
+    .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .result-grid .item {
+        background: var(--bg);
+        padding: 0.85rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+    }
+    .result-grid .item .k {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        letter-spacing: 0.5px;
+    }
+    .result-grid .item .v {
+        font-size: 0.95rem;
+        margin-top: 0.3rem;
+        word-break: break-all;
+        color: var(--text);
+    }
+    .actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    .config-preview {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1rem;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 0.8rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre;
+        margin-top: 1rem;
+        color: var(--text-dim);
+    }
+</style>
+
+<h1>Ajouter équipement</h1>
+<p style="color: var(--text-dim); margin-bottom: 2rem;">
+    Saisis les identifiants SSH de l'équipement. NodeSnap détectera automatiquement le vendor
+    et sauvegardera la configuration.
+</p>
+
+<div class="form-card">
+    <form id="scan-form">
+        <!-- ============ Section 1 : Connexion SSH ============ -->
+        <div class="form-section">
+            <div class="form-section-title">🔌 Connexion SSH</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="host">Adresse IP ou hostname</label>
+                    <input type="text" id="host" name="host" required placeholder="192.168.1.1">
+                </div>
+                <div class="form-group" style="flex: 0 0 120px;">
+                    <label for="port">Port SSH</label>
+                    <input type="number" id="port" name="port" value="22" min="1" max="65535">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="username">Nom d'utilisateur</label>
+                <input type="text" id="username" name="username" required placeholder="admin" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="password">Mot de passe</label>
+                <input type="password" id="password" name="password" required autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="vendor">Vendor <span class="optional">(optionnel, sinon détection auto)</span></label>
+                <select id="vendor" name="vendor">
+                    <option value="">— Détection automatique —</option>
+                    {% for v in vendors %}
+                    <option value="{{ v }}">{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- ============ Section 2 : Métadonnées ============ -->
+        <div class="form-section">
+            <div class="form-section-title">📋 Métadonnées (optionnelles)</div>
+            <div class="form-group">
+                <label for="common_name">Nom personnalisé <span class="optional">(optionnel)</span></label>
+                <input type="text" id="common_name" name="common_name"
+                       placeholder="Ex: Firewall Prod Paris" autocomplete="off">
+                <span class="field-hint">Affiché en priorité dans le dashboard à la place du hostname technique.</span>
+            </div>
+            <div class="form-group">
+                <label for="location">Localisation <span class="optional">(optionnel)</span></label>
+                <input type="text" id="location" name="location"
+                       placeholder="Ex: DC Paris - Salle A / Baie 12" autocomplete="off">
+                <span class="field-hint">Lieu physique de l'équipement, pour le retrouver rapidement.</span>
+            </div>
+            <div class="form-group">
+                <label for="comment">Commentaire <span class="optional">(optionnel)</span></label>
+                <textarea id="comment" name="comment"
+                          placeholder="Notes libres : rôle, redondance, contact, plage de maintenance..."></textarea>
+                <span class="field-hint">Visible sur la fiche détaillée de l'équipement.</span>
+            </div>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn">Lancer le scan</button>
+        <a href="/" class="btn secondary" style="margin-left: 0.5rem;">Annuler</a>
+    </form>
+</div>
+
+<div id="alert" class="alert"></div>
+
+<div id="result" class="result-card">
+    <h2 style="margin-top: 0;">Résultat du scan</h2>
+    <div class="result-grid" id="result-grid"></div>
+    <div class="actions" id="result-actions"></div>
+    <div class="config-preview" id="config-preview"></div>
+</div>
+
+<script>
+    const form = document.getElementById('scan-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const alertBox = document.getElementById('alert');
+    const resultBox = document.getElementById('result');
+    const resultGrid = document.getElementById('result-grid');
+    const resultActions = document.getElementById('result-actions');
+    const configPreview = document.getElementById('config-preview');
+
+    function showAlert(type, message) {
+        alertBox.className = 'alert ' + type + ' show';
+        alertBox.innerHTML = message;
+    }
+    function hideAlert() { alertBox.className = 'alert'; }
+    function hideResult() { resultBox.className = 'result-card'; }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideAlert();
+        hideResult();
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner"></span>Scan en cours...';
+        showAlert('info', '<span class="spinner"></span>Connexion SSH et récupération de la configuration en cours, cela peut prendre jusqu\'à 30 secondes...');
+
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch('/api/scan', { method: 'POST', body: formData });
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                showAlert('error', '❌ <strong>Erreur :</strong> ' + (data.error || 'scan échoué'));
+                return;
+            }
+
+            hideAlert();
+            const changeInfo = data.is_new
+                ? '<strong style="color: var(--green);">Nouveau snapshot #' + data.snapshot_id + '</strong>'
+                : '<strong style="color: var(--yellow);">Aucun changement détecté</strong>';
+
+            let gridHtml = `
+                <div class="item"><div class="k">Hostname</div><div class="v">${data.hostname}</div></div>
+                <div class="item"><div class="k">IP</div><div class="v">${data.ip_address}</div></div>
+                <div class="item"><div class="k">Vendor</div><div class="v"><span class="badge ${data.vendor}">${data.vendor}</span></div></div>
+                <div class="item"><div class="k">Taille</div><div class="v">${data.size_bytes} octets</div></div>
+                <div class="item"><div class="k">SHA256</div><div class="v"><code>${data.sha256.substring(0,16)}…</code></div></div>
+                <div class="item"><div class="k">État</div><div class="v">${changeInfo}</div></div>
+            `;
+            if (data.common_name) {
+                gridHtml += `<div class="item"><div class="k">Nom personnalisé</div><div class="v"><strong>${data.common_name}</strong></div></div>`;
+            }
+            if (data.location) {
+                gridHtml += `<div class="item"><div class="k">Localisation</div><div class="v">📍 ${data.location}</div></div>`;
+            }
+            resultGrid.innerHTML = gridHtml;
+
+            if (data.snapshot_id) {
+                resultActions.innerHTML = `
+                    <a href="/api/snapshots/${data.snapshot_id}/download.txt" class="btn">⬇ Télécharger .txt</a>
+                    <a href="/api/snapshots/${data.snapshot_id}/download.json" class="btn">⬇ Télécharger .json</a>
+                    <a href="/devices/${data.device_id}" class="btn secondary">Voir l'équipement</a>
+                `;
+            } else {
+                resultActions.innerHTML = `<a href="/devices/${data.device_id}" class="btn secondary">Voir l'équipement</a>`;
+            }
+
+            configPreview.textContent = data.config.substring(0, 5000) + (data.config.length > 5000 ? '\n\n[... tronqué, ' + (data.config.length - 5000) + ' octets supplémentaires ...]' : '');
+            resultBox.className = 'result-card show';
+            form.password.value = '';
+        } catch (err) {
+            showAlert('error', '❌ <strong>Erreur réseau :</strong> ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Lancer le scan';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}Gestion des utilisateurs - NodeSnap{% endblock %}
+{% block content %}
+<style>
+    .users-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .role-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .role-badge.admin {
+        background: rgba(188, 140, 255, 0.15);
+        color: var(--purple);
+        border: 1px solid var(--purple);
+    }
+    .role-badge.user {
+        background: var(--bg);
+        color: var(--text-dim);
+        border: 1px solid var(--border);
+    }
+    /* Modale */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .modal h3 {
+        margin: 0 0 1rem;
+        color: var(--accent);
+        font-size: 1.2rem;
+    }
+    .modal h3.danger { color: var(--red); }
+    .modal .form-group { margin-bottom: 1rem; }
+    .modal .form-group label {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: var(--text-dim);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .modal .form-group input,
+    .modal .form-group select {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.95rem;
+        font-family: inherit;
+    }
+    .modal .form-group input:focus,
+    .modal .form-group select:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .modal-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        margin-top: 1.5rem;
+    }
+    .modal-error {
+        background: rgba(207, 34, 46, 0.1);
+        border: 1px solid var(--red);
+        color: var(--red);
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        display: none;
+    }
+    .modal-error.show { display: block; }
+</style>
+
+<div class="users-toolbar">
+    <h1 style="margin: 0;">Gestion des utilisateurs</h1>
+    <button class="btn" id="btn-new-user">+ Nouvel utilisateur</button>
+</div>
+
+<p style="color: var(--text-dim); margin-bottom: 1.5rem;">
+    {{ users|length }} utilisateur(s) · {{ admin_count }} administrateur(s)
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width: 60px; text-align: center;">ID</th>
+            <th>Nom d'utilisateur</th>
+            <th style="width: 120px; text-align: center;">Rôle</th>
+            <th style="width: 180px; text-align: center;">Créé le</th>
+            <th style="width: 180px; text-align: center;">Dernière connexion</th>
+            <th style="text-align: center;">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr id="user-row-{{ u.id }}">
+            <td>#{{ u.id }}</td>
+            <td>
+                <strong>{{ u.username }}</strong>
+                {% if u.id == user.id %}<span style="color: var(--text-dim); font-size: 0.8rem;"> (vous)</span>{% endif %}
+            </td>
+            <td style="text-align: center;">
+                <span class="role-badge {{ u.role }}">{{ u.role }}</span>
+            </td>
+            <td>{{ u.created_at }}</td>
+            <td>{{ u.last_login or '—' }}</td>
+            <td>
+                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
+                    <button class="btn secondary"
+                            onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.role }}')">
+                        Modifier
+                    </button>
+                    <button class="btn secondary"
+                            onclick="openPasswordModal({{ u.id }}, '{{ u.username }}')">
+                        Mot de passe
+                    </button>
+                    {% if u.id != user.id %}
+                    <button class="btn danger"
+                            onclick="deleteUser({{ u.id }}, '{{ u.username }}')"
+                            title="Supprimer cet utilisateur">
+                        🗑
+                    </button>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- ============ Modale création ============ -->
+<div class="modal-overlay" id="modal-create">
+    <div class="modal">
+        <h3>Nouvel utilisateur</h3>
+        <div class="modal-error" id="create-error"></div>
+        <form id="form-create">
+            <div class="form-group">
+                <label for="c-username">Nom d'utilisateur</label>
+                <input type="text" id="c-username" name="username" required autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="c-password">Mot de passe (8 caractères minimum)</label>
+                <input type="password" id="c-password" name="password" required minlength="8" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label for="c-role">Rôle</label>
+                <select id="c-role" name="role">
+                    {% for r in valid_roles %}
+                    <option value="{{ r }}">{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn secondary" onclick="closeModal('modal-create')">Annuler</button>
+                <button type="submit" class="btn">Créer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============ Modale édition ============ -->
+<div class="modal-overlay" id="modal-edit">
+    <div class="modal">
+        <h3>Modifier l'utilisateur</h3>
+        <div class="modal-error" id="edit-error"></div>
+        <form id="form-edit">
+            <input type="hidden" id="e-id">
+            <div class="form-group">
+                <label for="e-username">Nom d'utilisateur</label>
+                <input type="text" id="e-username" name="username" required autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="e-role">Rôle</label>
+                <select id="e-role" name="role">
+                    {% for r in valid_roles %}
+                    <option value="{{ r }}">{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn secondary" onclick="closeModal('modal-edit')">Annuler</button>
+                <button type="submit" class="btn">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============ Modale mot de passe ============ -->
+<div class="modal-overlay" id="modal-password">
+    <div class="modal">
+        <h3>Changer le mot de passe</h3>
+        <p style="color: var(--text-dim); margin-bottom: 1rem;">
+            Pour <strong id="p-username" style="color: var(--text);"></strong>
+        </p>
+        <div class="modal-error" id="password-error"></div>
+        <form id="form-password">
+            <input type="hidden" id="p-id">
+            <div class="form-group">
+                <label for="p-new">Nouveau mot de passe (8 caractères minimum)</label>
+                <input type="password" id="p-new" name="password" required minlength="8" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label for="p-confirm">Confirmer</label>
+                <input type="password" id="p-confirm" required minlength="8" autocomplete="new-password">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn secondary" onclick="closeModal('modal-password')">Annuler</button>
+                <button type="submit" class="btn">Mettre à jour</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // ---- Helpers modales ----
+    function openModal(id) { document.getElementById(id).classList.add('show'); }
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('show');
+        ['create-error','edit-error','password-error'].forEach(e => {
+            const el = document.getElementById(e);
+            if (el) el.classList.remove('show');
+        });
+    }
+    function showError(id, message) {
+        const el = document.getElementById(id);
+        el.textContent = '⚠ ' + message;
+        el.classList.add('show');
+    }
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', e => {
+            if (e.target === overlay) overlay.classList.remove('show');
+        });
+    });
+
+    // ---- Création ----
+    document.getElementById('btn-new-user').addEventListener('click', () => openModal('modal-create'));
+    document.getElementById('form-create').addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData();
+        fd.append('username', document.getElementById('c-username').value);
+        fd.append('password', document.getElementById('c-password').value);
+        fd.append('role',     document.getElementById('c-role').value);
+        try {
+            const res = await fetch('/api/users', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok && data.success) location.reload();
+            else showError('create-error', data.error || 'Création échouée');
+        } catch (err) { showError('create-error', err.message); }
+    });
+
+    // ---- Édition ----
+    function openEditModal(id, username, role) {
+        document.getElementById('e-id').value = id;
+        document.getElementById('e-username').value = username;
+        document.getElementById('e-role').value = role;
+        openModal('modal-edit');
+    }
+    document.getElementById('form-edit').addEventListener('submit', async e => {
+        e.preventDefault();
+        const id = document.getElementById('e-id').value;
+        const fd = new FormData();
+        fd.append('username', document.getElementById('e-username').value);
+        fd.append('role',     document.getElementById('e-role').value);
+        try {
+            const res = await fetch('/api/users/' + id + '/update', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok && data.success) location.reload();
+            else showError('edit-error', data.error || 'Modification échouée');
+        } catch (err) { showError('edit-error', err.message); }
+    });
+
+    // ---- Mot de passe ----
+    function openPasswordModal(id, username) {
+        document.getElementById('p-id').value = id;
+        document.getElementById('p-username').textContent = username;
+        document.getElementById('p-new').value = '';
+        document.getElementById('p-confirm').value = '';
+        openModal('modal-password');
+    }
+    document.getElementById('form-password').addEventListener('submit', async e => {
+        e.preventDefault();
+        const id = document.getElementById('p-id').value;
+        const pwd = document.getElementById('p-new').value;
+        const conf = document.getElementById('p-confirm').value;
+        if (pwd !== conf) { showError('password-error', 'Les mots de passe ne correspondent pas.'); return; }
+        const fd = new FormData();
+        fd.append('password', pwd);
+        try {
+            const res = await fetch('/api/users/' + id + '/password', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                closeModal('modal-password');
+                alert('Mot de passe mis à jour.');
+            } else {
+                showError('password-error', data.error || 'Échec de la mise à jour');
+            }
+        } catch (err) { showError('password-error', err.message); }
+    });
+
+    // ---- Suppression ----
+    async function deleteUser(id, username) {
+        if (!confirm("Supprimer définitivement l'utilisateur '" + username + "' ?\n\nCette action est irréversible.")) return;
+        try {
+            const res = await fetch('/api/users/' + id, { method: 'DELETE' });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                document.getElementById('user-row-' + id).remove();
+            } else {
+                alert('Erreur : ' + (data.error || data.detail || 'suppression échouée'));
+            }
+        } catch (err) {
+            alert('Erreur réseau : ' + err.message);
+        }
+    }
+</script>
+{% endblock %}

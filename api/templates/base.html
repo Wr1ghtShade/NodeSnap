@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NodeSnap{% endblock %}</title>
+    <script>
+        // Applique le thème AVANT le rendu pour éviter le flash
+        (function() {
+            var t = document.cookie.match(/(?:^|; )nodesnap_theme=([^;]+)/);
+            var theme = t ? decodeURIComponent(t[1]) : null;
+            if (!theme) {
+                theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+                    ? 'light' : 'dark';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <style>
+        /* ---- THÈME DARK (par défaut) ---- */
+        :root, :root[data-theme="dark"] {
+            --bg:        #0d1117;
+            --bg-alt:    #161b22;
+            --bg-hover:  #1f2937;
+            --border:    #30363d;
+            --text:      #e6edf3;
+            --text-dim:  #8b949e;
+            --accent:    #58a6ff;
+            --accent-h:  #79c0ff;
+            --green:     #3fb950;
+            --yellow:    #d29922;
+            --red:       #f85149;
+            --purple:    #bc8cff;
+            --shadow:    0 1px 3px rgba(0,0,0,0.3);
+        }
+        /* ---- THÈME LIGHT ---- */
+        :root[data-theme="light"] {
+            --bg:        #f6f8fa;
+            --bg-alt:    #ffffff;
+            --bg-hover:  #f0f3f6;
+            --border:    #d0d7de;
+            --text:      #1f2328;
+            --text-dim:  #656d76;
+            --accent:    #0969da;
+            --accent-h:  #0550ae;
+            --green:     #1a7f37;
+            --yellow:    #9a6700;
+            --red:       #cf222e;
+            --purple:    #8250df;
+            --shadow:    0 1px 3px rgba(0,0,0,0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            transition: background 0.15s, color 0.15s;
+        }
+        /* ============ HEADER & NAVIGATION ============ */
+        header {
+            background: var(--bg-alt);
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .logo {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-right: 1.25rem;
+            border-right: 1px solid var(--border);
+            margin-right: 0.25rem;
+        }
+        .logo::before {
+            content: "◆";
+            color: var(--purple);
+            font-size: 1.1rem;
+        }
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 0.15rem;
+            flex: 1;
+        }
+        nav a.nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            padding: 0.5rem 0.85rem;
+            border-radius: 6px;
+            position: relative;
+            transition: color 0.15s, background 0.15s;
+            white-space: nowrap;
+        }
+        nav a.nav-link svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 2;
+            flex-shrink: 0;
+        }
+        nav a.nav-link:hover {
+            color: var(--text);
+            background: var(--bg-hover);
+        }
+        nav a.nav-link.active {
+            color: var(--purple);
+            background: rgba(188, 140, 255, 0.1);
+        }
+        nav a.nav-link.active::after {
+            content: "";
+            position: absolute;
+            bottom: -0.85rem;
+            left: 0.85rem;
+            right: 0.85rem;
+            height: 2px;
+            background: var(--purple);
+            border-radius: 2px 2px 0 0;
+        }
+        nav a.nav-link.ext svg.ext-icon {
+            width: 11px;
+            height: 11px;
+            opacity: 0.5;
+            margin-left: -0.15rem;
+        }
+        /* ---- Zone utilisateur (droite) ---- */
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-left: 1rem;
+            border-left: 1px solid var(--border);
+        }
+        .user-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            transition: border-color 0.15s;
+        }
+        .user-chip:hover { border-color: var(--purple); }
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--purple), var(--accent));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+        .user-meta {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
+        .user-meta .name {
+            color: var(--text);
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+        .user-meta .role {
+            color: var(--text-dim);
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 1px;
+        }
+        .icon-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            width: 34px;
+            height: 34px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            padding: 0;
+            text-decoration: none;
+        }
+        .icon-btn svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 2;
+        }
+        .icon-btn:hover {
+            color: var(--text);
+            border-color: var(--text-dim);
+            background: var(--bg-hover);
+        }
+        .icon-btn.logout:hover {
+            color: var(--red);
+            border-color: var(--red);
+            background: rgba(207, 34, 46, 0.08);
+        }
+        /* ---- Toggle thème (réutilise .icon-btn) ---- */
+        :root[data-theme="dark"]  .theme-toggle .icon-sun  { display: inline; }
+        :root[data-theme="dark"]  .theme-toggle .icon-moon { display: none; }
+        :root[data-theme="light"] .theme-toggle .icon-sun  { display: none; }
+        :root[data-theme="light"] .theme-toggle .icon-moon { display: inline; }
+
+        /* ---- Responsive : masquer les libellés en dessous de 900px ---- */
+        @media (max-width: 900px) {
+            nav a.nav-link span.label { display: none; }
+            nav a.nav-link { padding: 0.5rem 0.65rem; }
+            .user-meta { display: none; }
+            .logo { padding-right: 0.75rem; }
+        }
+
+
+        main {
+            max-width: 1500px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        h1 {
+            font-size: 1.75rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+        h2 {
+            font-size: 1.25rem;
+            margin: 2rem 0 1rem;
+            color: var(--text-dim);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow);
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0.25rem;
+            color: var(--accent);
+        }
+        table {
+            width: 100%;
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        th, td {
+            padding: 0.85rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: var(--bg);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: var(--bg-hover); }
+        td a { color: var(--accent); text-decoration: none; }
+        td a:hover { color: var(--accent-h); text-decoration: underline; }
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+        }
+        .badge.fortinet      { color: #e8603d; border-color: rgba(232, 96, 61, 0.4); }
+        .badge.aruba_cx,
+        .badge.aruba_procurve{ color: #e87c00; border-color: rgba(232, 124, 0, 0.4); }
+        .badge.hp_comware    { color: #0096d6; border-color: rgba(0, 150, 214, 0.4); }
+        .badge.paloalto      { color: #fa582d; border-color: rgba(250, 88, 45, 0.4); }
+        .badge.dell_os10,
+    .badge.dell_os6,
+    .badge.dell_force10,
+    .badge.dell_powerconnect {
+        background: rgba(0, 105, 180, 0.12);
+        color: #0069b4;
+        border: 1px solid rgba(0, 105, 180, 0.4);
+    }
+    .badge.juniper {
+        background: rgba(132, 180, 72, 0.12);
+        color: #84b448;
+        border: 1px solid rgba(132, 180, 72, 0.4);
+    }
+    .badge.extreme_exos {
+        background: rgba(148, 43, 138, 0.12);
+        color: #942b8a;
+        border: 1px solid rgba(148, 43, 138, 0.4);
+    }
+    .badge.arista {
+        background: rgba(0, 116, 193, 0.12);
+        color: #0074c1;
+        border: 1px solid rgba(0, 116, 193, 0.4);
+    }
+    .badge.cisco_nxos,
+    .badge.cisco_asa {
+        background: rgba(29, 160, 204, 0.12);
+        color: #1da0cc;
+        border: 1px solid rgba(29, 160, 204, 0.4);
+    }
+    .badge.huawei {
+        background: rgba(211, 40, 48, 0.12);
+        color: #d32830;
+        border: 1px solid rgba(211, 40, 48, 0.4);
+    }
+    .badge.mikrotik {
+        background: rgba(41, 51, 65, 0.15);
+        color: #293341;
+        border: 1px solid rgba(41, 51, 65, 0.4);
+    }
+    .badge.alliedtelesis {
+        background: rgba(0, 102, 179, 0.12);
+        color: #0066b3;
+        border: 1px solid rgba(0, 102, 179, 0.4);
+    }
+    .badge.checkpoint {
+        background: rgba(230, 30, 42, 0.12);
+        color: #e61e2a;
+        border: 1px solid rgba(230, 30, 42, 0.4);
+    }
+    .badge.sonicwall {
+        background: rgba(255, 127, 0, 0.12);
+        color: #ff7f00;
+        border: 1px solid rgba(255, 127, 0, 0.4);
+    }
+    .badge.watchguard {
+        background: rgba(220, 20, 60, 0.12);
+        color: #dc143c;
+        border: 1px solid rgba(220, 20, 60, 0.4);
+    }
+    .badge.stormshield {
+        background: rgba(0, 87, 183, 0.12);
+        color: #0057b7;
+        border: 1px solid rgba(0, 87, 183, 0.4);
+    }
+    .badge.cisco_ios     { color: #1ba0d7; border-color: rgba(27, 160, 215, 0.4); }
+        .empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-dim);
+        }
+        .empty .icon {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 1rem;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            height: 36px;
+            padding: 0 1rem;
+            background: var(--accent);
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            font-family: inherit;
+            line-height: 1;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            border: 1px solid var(--accent);
+            cursor: pointer;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+        .btn:hover { background: var(--accent-h); border-color: var(--accent-h); }
+        .btn.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn.secondary:hover { background: var(--bg-hover); }
+        /* Bouton danger (rouge fixe sur les deux thèmes) */
+        .btn.danger {
+            background: #cf222e;
+            border-color: #cf222e;
+            color: white;
+        }
+        .btn.danger:hover {
+            background: #a40e26;
+            border-color: #a40e26;
+        }
+        /* Variante icône seule (corbeille dans les actions) */
+        .btn.icon-only {
+            width: 36px;
+            padding: 0;
+        }
+        code {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            background: var(--bg);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.85em;
+            color: var(--purple);
+            border: 1px solid var(--border);
+        }
+        footer {
+            text-align: center;
+            padding: 1.5rem 2rem;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+            margin-top: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+        }
+        footer .footer-sep {
+            opacity: 0.3;
+        }
+        footer a {
+            color: var(--text-dim);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: color 0.15s;
+        }
+        footer a:hover { color: var(--text); }
+        footer .version-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.15rem 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--purple);
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/" class="logo">NodeSnap</a>
+        <nav>
+            <a href="/" class="nav-link" data-path="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="9"/>
+                    <rect x="14" y="3" width="7" height="5"/>
+                    <rect x="14" y="12" width="7" height="9"/>
+                    <rect x="3" y="16" width="7" height="5"/>
+                </svg>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="/scan" class="nav-link" data-path="/scan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                <span class="label">Add</span>
+            </a>
+            {% if user and user.role == "admin" %}
+            <a href="/users" class="nav-link" data-path="/users">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span class="label">Users</span>
+            </a>
+            <a href="/audit" class="nav-link" data-path="/audit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="9" y1="13" x2="15" y2="13"/>
+                    <line x1="9" y1="17" x2="15" y2="17"/>
+                </svg>
+                <span class="label">Audit</span>
+            </a>
+            {% endif %}
+            <a href="/api/health" target="_blank" class="nav-link ext">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                <span class="label">Debug</span>
+                <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+            </a>
+            <a href="/api/docs" target="_blank" class="nav-link ext">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                </svg>
+                <span class="label">API Docs</span>
+                <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+            </a>
+        </nav>
+        <div class="nav-actions">
+            {% if user %}
+            <div class="user-chip" title="Connecté en tant que {{ user.username }}">
+                <div class="user-avatar">{{ user.username[0] }}</div>
+                <div class="user-meta">
+                    <span class="name">{{ user.username }}</span>
+                    <span class="role">{{ user.role or 'user' }}</span>
+                </div>
+            </div>
+            {% endif %}
+            <button class="icon-btn theme-toggle" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème">
+                <span class="icon-sun">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                    </svg>
+                </span>
+                <span class="icon-moon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </span>
+            </button>
+            {% if user %}
+            <a href="/logout" class="icon-btn logout" title="Déconnexion" aria-label="Déconnexion">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+            </a>
+            {% endif %}
+        </div>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <span>NodeSnap</span>
+        <span class="version-badge">v{{ app_version }}</span>
+        <span class="footer-sep">·</span>
+        <span>Network Configuration Backup</span>
+        <span class="footer-sep">·</span>
+        <a href="https://github.com/Wr1ghtShade/NodeSnap" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            GitHub
+        </a>
+    </footer>
+    <script>
+        // Switcher de thème : inverse et mémorise dans un cookie (1 an)
+        document.getElementById('theme-toggle').addEventListener('click', function() {
+            var current = document.documentElement.getAttribute('data-theme') || 'dark';
+            var next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            var maxAge = 60 * 60 * 24 * 365; // 1 an
+            document.cookie = 'nodesnap_theme=' + next + '; path=/; max-age=' + maxAge + '; samesite=lax';
+        });
+    </script>
+
+    <script>
+        // Marque le lien de nav actif en fonction de l'URL courante
+        (function() {
+            var path = window.location.pathname;
+            document.querySelectorAll('nav a.nav-link[data-path]').forEach(function(a) {
+                var target = a.getAttribute('data-path');
+                if (target === '/' ? path === '/' : path.startsWith(target)) {
+                    a.classList.add('active');
+                }
+            });
+        })();
+    </script>
+
+    <!-- ============ Système de toast global ============ -->
+    <div id="ns-toast-container"></div>
+    <style>
+        #ns-toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            z-index: 9999;
+            pointer-events: none;
+            max-width: 380px;
+        }
+        .ns-toast {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 8px;
+            padding: 0.85rem 1.1rem;
+            color: var(--text);
+            font-size: 0.88rem;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            transform: translateX(120%);
+            transition: opacity 0.25s, transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.65rem;
+            min-width: 260px;
+        }
+        .ns-toast.show { opacity: 1; transform: translateX(0); }
+        .ns-toast.success { border-left-color: var(--green); }
+        .ns-toast.error   { border-left-color: var(--red); }
+        .ns-toast.info    { border-left-color: var(--accent); }
+        .ns-toast.warning { border-left-color: var(--yellow); }
+        .ns-toast .icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1.3; }
+        .ns-toast.success .icon { color: var(--green); }
+        .ns-toast.error   .icon { color: var(--red); }
+        .ns-toast.info    .icon { color: var(--accent); }
+        .ns-toast.warning .icon { color: var(--yellow); }
+        .ns-toast .body { flex: 1; line-height: 1.4; }
+        .ns-toast .close {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0;
+            line-height: 1;
+            opacity: 0.6;
+            transition: opacity 0.15s;
+        }
+        .ns-toast .close:hover { opacity: 1; color: var(--text); }
+    </style>
+    <script>
+    window.nsToast = (function() {
+        const container = document.getElementById('ns-toast-container');
+        const ICONS = { success: '✓', error: '✗', info: 'ℹ', warning: '⚠' };
+        function show(message, type, duration) {
+            type = type || 'info';
+            duration = duration || 3500;
+            const t = document.createElement('div');
+            t.className = 'ns-toast ' + type;
+            t.innerHTML = '<span class="icon">' + (ICONS[type] || 'ℹ') + '</span>' +
+                          '<div class="body"></div>' +
+                          '<button class="close" aria-label="Fermer">×</button>';
+            t.querySelector('.body').textContent = message;
+            container.appendChild(t);
+            // Force reflow puis show
+            requestAnimationFrame(() => t.classList.add('show'));
+            const dismiss = () => {
+                t.classList.remove('show');
+                setTimeout(() => t.remove(), 350);
+            };
+            t.querySelector('.close').addEventListener('click', dismiss);
+            setTimeout(dismiss, duration);
+        }
+        return {
+            show: show,
+            success: (m, d) => show(m, 'success', d),
+            error:   (m, d) => show(m, 'error',   d || 5000),
+            info:    (m, d) => show(m, 'info',    d),
+            warning: (m, d) => show(m, 'warning', d),
+        };
+    })();
+    </script>
+
+</body>
+</html>

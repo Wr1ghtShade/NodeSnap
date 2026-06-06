@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Journal d'audit - NodeSnap
+
+<!-- ============ Modale de purge ============ -->
+<div class="modal-overlay" id="modal-purge">
+    <div class="modal">
+        <h3 class="danger">🧹 Purger le journal d'audit</h3>
+        <p style="color: var(--text-dim); margin-bottom: 1rem;">
+            Supprime définitivement toutes les entrées plus vieilles que la durée de rétention choisie.
+        </p>
+        <div class="modal-error" id="purge-error"></div>
+        <div class="form-group">
+            <label for="purge-days">Conserver les entrées des derniers (jours)</label>
+            <input type="number" id="purge-days" min="1" max="3650" value="90">
+        </div>
+        <div id="purge-preview" style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem 1rem; margin: 1rem 0; font-size: 0.9rem; color: var(--text-dim);">
+            Calcul en cours...
+        </div>
+        <p style="color: var(--red); font-size: 0.85rem; margin-top: 0.5rem;">
+            ⚠ Cette action est irréversible.
+        </p>
+        <div class="modal-actions">
+            <button type="button" class="btn secondary" id="purge-cancel">Annuler</button>
+            <button type="button" class="btn danger" id="purge-confirm">Purger</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Reprise des styles modale (mêmes que users.html) */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 100%;
+    }
+    .modal h3 {
+        margin: 0 0 1rem;
+        color: var(--accent);
+        font-size: 1.2rem;
+    }
+    .modal h3.danger { color: var(--red); }
+    .modal .form-group { margin-bottom: 1rem; }
+    .modal .form-group label {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: var(--text-dim);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .modal .form-group input {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.95rem;
+        font-family: inherit;
+    }
+    .modal-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        margin-top: 1.5rem;
+    }
+    .modal-error {
+        background: rgba(207, 34, 46, 0.1);
+        border: 1px solid var(--red);
+        color: var(--red);
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        display: none;
+    }
+    .modal-error.show { display: block; }
+</style>
+
+<script>
+    const purgeModal   = document.getElementById('modal-purge');
+    const purgeBtn     = document.getElementById('btn-purge');
+    const purgeCancel  = document.getElementById('purge-cancel');
+    const purgeConfirm = document.getElementById('purge-confirm');
+    const purgeDays    = document.getElementById('purge-days');
+    const purgePreview = document.getElementById('purge-preview');
+    const purgeError   = document.getElementById('purge-error');
+
+    function showPurgeError(msg) {
+        purgeError.textContent = '⚠ ' + msg;
+        purgeError.classList.add('show');
+    }
+    function hidePurgeError() { purgeError.classList.remove('show'); }
+
+    async function refreshPreview() {
+        hidePurgeError();
+        const days = parseInt(purgeDays.value, 10);
+        if (!days || days < 1) {
+            purgePreview.innerHTML = '<span style="color: var(--red);">Durée invalide (minimum 1 jour).</span>';
+            return;
+        }
+        purgePreview.textContent = 'Calcul en cours...';
+        try {
+            const res = await fetch('/api/audit/purge/preview?days=' + days);
+            const data = await res.json();
+            if (res.ok && data.success) {
+                if (data.would_delete === 0) {
+                    purgePreview.innerHTML = '<strong style="color: var(--green);">Aucune entrée à supprimer</strong> avec cette rétention.';
+                } else {
+                    purgePreview.innerHTML = '<strong style="color: var(--red);">' + data.would_delete + ' entrée(s)</strong> seront supprimées <span style="color: var(--text-dim);">(antérieures au ' + data.cutoff.replace('T', ' ') + ')</span>.';
+                }
+            } else {
+                purgePreview.innerHTML = '<span style="color: var(--red);">Erreur : ' + (data.error || 'inconnue') + '</span>';
+            }
+        } catch (err) {
+            purgePreview.innerHTML = '<span style="color: var(--red);">Erreur réseau : ' + err.message + '</span>';
+        }
+    }
+
+    purgeBtn.addEventListener('click', () => {
+        purgeDays.value = 90;
+        hidePurgeError();
+        refreshPreview();
+        purgeModal.classList.add('show');
+    });
+    purgeCancel.addEventListener('click', () => purgeModal.classList.remove('show'));
+    purgeModal.addEventListener('click', (e) => {
+        if (e.target === purgeModal) purgeModal.classList.remove('show');
+    });
+    purgeDays.addEventListener('input', refreshPreview);
+
+    purgeConfirm.addEventListener('click', async () => {
+        const days = parseInt(purgeDays.value, 10);
+        if (!days || days < 1) { showPurgeError('Durée invalide.'); return; }
+        if (!confirm('Confirmer la suppression définitive des entrées de plus de ' + days + ' jours ?')) return;
+
+        purgeConfirm.disabled = true;
+        purgeConfirm.textContent = 'Purge en cours...';
+        const fd = new FormData();
+        fd.append('days', days);
+        try {
+            const res = await fetch('/api/audit/purge', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                alert(data.deleted + ' entrée(s) supprimée(s).');
+                location.reload();
+            } else {
+                showPurgeError(data.error || 'Purge échouée');
+                purgeConfirm.disabled = false;
+                purgeConfirm.textContent = 'Purger';
+            }
+        } catch (err) {
+            showPurgeError('Erreur réseau : ' + err.message);
+            purgeConfirm.disabled = false;
+            purgeConfirm.textContent = 'Purger';
+        }
+    });
+</script>
+
+{% endblock %}
+{% block content %}
+<style>
+    .audit-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .filters {
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow);
+    }
+    .filters form {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .filters .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .filters label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        letter-spacing: 0.5px;
+    }
+    .filters select, .filters input {
+        padding: 0.5rem 0.7rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.85rem;
+        font-family: inherit;
+        min-width: 140px;
+    }
+    .filters select:focus, .filters input:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .audit-table td {
+        font-size: 0.85rem;
+        vertical-align: top;
+    }
+    .audit-table .ts {
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        white-space: nowrap;
+    }
+    .audit-table .user {
+        font-weight: 600;
+    }
+    .src-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .src-badge.web {
+        background: rgba(88, 166, 255, 0.15);
+        color: var(--accent);
+        border: 1px solid var(--accent);
+    }
+    .src-badge.cli {
+        background: rgba(188, 140, 255, 0.15);
+        color: var(--purple);
+        border: 1px solid var(--purple);
+    }
+    .action-tag {
+        display: inline-block;
+        padding: 0.18rem 0.55rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-family: "SF Mono", Monaco, monospace;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+    }
+    .action-tag.fail {
+        background: rgba(207, 34, 46, 0.1);
+        color: var(--red);
+        border-color: var(--red);
+    }
+    .details-cell {
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 0.72rem;
+        color: var(--text-dim);
+        max-width: 320px;
+        word-break: break-word;
+    }
+    .pagination {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+        align-items: center;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .pagination .info {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        margin: 0 1rem;
+    }
+    .pagination a, .pagination span.current {
+        padding: 0.4rem 0.75rem;
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        text-decoration: none;
+        font-size: 0.85rem;
+        min-width: 38px;
+        text-align: center;
+    }
+    .pagination a:hover { border-color: var(--accent); color: var(--accent); }
+    .pagination span.current {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+    .pagination span.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+</style>
+
+<div class="audit-toolbar">
+    <h1 style="margin: 0;">Audit</h1>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <span style="color: var(--text-dim); font-size: 0.9rem;">
+            {{ total }} entrée(s) au total
+        </span>
+        <button class="btn danger" id="btn-purge">🧹 Purger</button>
+    </div>
+</div>
+
+<div class="filters">
+    <form method="get" action="/audit">
+        <div class="field">
+            <label for="f-user">Utilisateur</label>
+            <select name="username" id="f-user">
+                <option value="">— Tous —</option>
+                {% for u in distinct_users %}
+                <option value="{{ u }}" {% if filter_username == u %}selected{% endif %}>{{ u }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="f-action">Action</label>
+            <select name="action" id="f-action">
+                <option value="">— Toutes —</option>
+                {% for code, label in all_actions.items() %}
+                <option value="{{ code }}" {% if filter_action == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="f-source">Source</label>
+            <select name="source" id="f-source">
+                <option value="">— Toutes —</option>
+                <option value="web" {% if filter_source == 'web' %}selected{% endif %}>web</option>
+                <option value="cli" {% if filter_source == 'cli' %}selected{% endif %}>cli</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn">Filtrer</button>
+        </div>
+        {% if filter_username or filter_action or filter_source %}
+        <div class="field">
+            <label>&nbsp;</label>
+            <a href="/audit" class="btn secondary">Réinitialiser</a>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+{% if rows %}
+<table class="audit-table">
+    <thead>
+        <tr>
+            <th style="width: 160px; text-align: center;">Date</th>
+            <th style="width: 120px;">Utilisateur</th>
+            <th style="width: 80px;  text-align: center;">Source</th>
+            <th style="width: 180px;">Action</th>
+            <th>Cible</th>
+            <th>Détails</th>
+            <th style="width: 110px;">IP</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td class="ts">{{ r.timestamp }}</td>
+            <td class="user">{{ r.username or '—' }}</td>
+            <td style="text-align: center;">
+                <span class="src-badge {{ r.source }}">{{ r.source }}</span>
+            </td>
+            <td>
+                <span class="action-tag {% if not r.success %}fail{% endif %}">
+                    {{ all_actions.get(r.action, r.action) }}{% if not r.success %} ✗{% endif %}
+                </span>
+            </td>
+            <td><code>{{ r.target or '—' }}</code></td>
+            <td class="details-cell">{{ r.details or '' }}</td>
+            <td><code>{{ r.ip_address or '—' }}</code></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="pagination">
+    {% set qs = '' %}
+    {% if filter_username %}{% set qs = qs + '&username=' + filter_username %}{% endif %}
+    {% if filter_action %}{% set qs = qs + '&action=' + filter_action %}{% endif %}
+    {% if filter_source %}{% set qs = qs + '&source=' + filter_source %}{% endif %}
+
+    {% if page > 1 %}
+        <a href="?page=1{{ qs }}">«</a>
+        <a href="?page={{ page - 1 }}{{ qs }}">‹</a>
+    {% else %}
+        <span class="disabled">«</span>
+        <span class="disabled">‹</span>
+    {% endif %}
+
+    <span class="info">Page {{ page }} / {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{{ qs }}">›</a>
+        <a href="?page={{ total_pages }}{{ qs }}">»</a>
+    {% else %}
+        <span class="disabled">›</span>
+        <span class="disabled">»</span>
+    {% endif %}
+</div>
+{% else %}
+<div class="empty">
+    <div class="icon">📋</div>
+    <p>Aucune entrée d'audit pour ces critères.</p>
+</div>
+{% endif %}
+{% endblock %}
