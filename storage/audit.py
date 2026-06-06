@@ -1,12 +1,14 @@
 """NodeSnap - Journal d'audit des actions utilisateurs."""
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from storage.database import get_connection, init_db
 
 log = logging.getLogger("nodesnap.audit")
+
+_INITIALIZED = False
 
 AUDIT_SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -57,10 +59,38 @@ ACTIONS = {
 
 
 def init_audit_table():
-    """Crée la table d'audit si elle n'existe pas."""
+    """Crée la table d'audit si elle n'existe pas. Idempotent et caché en mémoire."""
+    global _INITIALIZED
+    if _INITIALIZED:
+        return
     init_db()
     with get_connection() as conn:
         conn.executescript(AUDIT_SCHEMA)
+    _INITIALIZED = True
+
+
+def count_recent_failures(username: str, ip: str | None, window_minutes: int = 15) -> int:
+    """Compte les login_failed pour ce username/IP dans la fenêtre donnée.
+    Utilisé par le rate limiter du login. La requête combine les deux critères en OR
+    pour bloquer à la fois les attaques par dictionnaire (même username, IPs variées)
+    et le scanning (même IP, usernames variés)."""
+    init_audit_table()
+    cutoff = (datetime.now() - timedelta(minutes=window_minutes)).isoformat(timespec="seconds")
+    with get_connection() as conn:
+        if ip:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM audit_log "
+                "WHERE action = 'login_failed' AND timestamp >= ? "
+                "AND (username = ? OR ip_address = ?)",
+                (cutoff, username, ip),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM audit_log "
+                "WHERE action = 'login_failed' AND timestamp >= ? AND username = ?",
+                (cutoff, username),
+            ).fetchone()
+    return row["c"]
 
 
 def log_action(
@@ -135,7 +165,6 @@ def query_audit(
 
 def list_distinct_users():
     """Liste des utilisateurs ayant des entrées dans l'audit (pour les filtres UI)."""
-    init_audit_table()
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT DISTINCT username FROM audit_log WHERE username IS NOT NULL ORDER BY username"

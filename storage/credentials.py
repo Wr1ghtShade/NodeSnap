@@ -16,6 +16,8 @@ log = logging.getLogger("nodesnap.credentials")
 PROJECT_DIR = Path(__file__).parent.parent
 ENV_FILE = PROJECT_DIR / ".env"
 
+_INITIALIZED = False
+
 CREDS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS device_credentials (
     device_id        INTEGER PRIMARY KEY,
@@ -58,11 +60,15 @@ def _ensure_master_key() -> bytes:
 
 
 def init_credentials_table():
-    """Initialise la table device_credentials et garantit la clé maître."""
+    """Initialise la table device_credentials et garantit la clé maître. Caché en mémoire."""
+    global _INITIALIZED
+    if _INITIALIZED:
+        return
     init_db()
     with get_connection() as conn:
         conn.executescript(CREDS_SCHEMA)
     _ensure_master_key()
+    _INITIALIZED = True
 
 
 def encrypt_password(plain: str) -> str:

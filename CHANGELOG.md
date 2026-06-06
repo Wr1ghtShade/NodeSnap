@@ -32,6 +32,37 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Endpoint debug session supprimé
 - Permissions systemd renforcées (NoNewPrivileges, PrivateTmp, ProtectSystem…)
 
+## [1.0.2] — 2026-06-06
+
+### 🔒 Sécurité
+
+- Protection CSRF via vérification Origin/Referer sur toutes les requêtes modifiantes
+- Régénération de la session à la connexion (anti-fixation)
+- Invalidation des sessions actives après changement de mot de passe (colonne `session_version`)
+- Modèle de permissions durci : toutes les opérations d'écriture (scan, suppression, métadonnées, planification, credentials) réservées aux administrateurs
+- Audit ajouté sur les suppressions HTML (devices et snapshots) — auparavant non tracées
+- Rate limiting du login : 5 échecs / 15 min par username ou IP
+- Headers HTTP de sécurité : CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- Cookie de session `Secure` configurable via `HTTPS_ONLY=1`
+- Sanitization stricte des noms de fichiers en CLI (anti path traversal)
+- Endpoint public `/api/health` débarrassé de la version applicative
+
+### 🔧 Améliorations
+
+- Timeout dur de 10 min sur les scans planifiés (évite le blocage du pool en cas de session Netmiko figée)
+- Transaction `BEGIN IMMEDIATE` dans `_mark_run_result` (atomicité du compteur d'échecs)
+- Initialisation des tables mise en cache (plus de `CREATE TABLE IF NOT EXISTS` à chaque opération)
+- Migration FastAPI : `@app.on_event("startup")` → `lifespan` (API moderne)
+- Refresh automatique de la session quand un admin se met à jour lui-même
+- Lien "Debug" renommé en "Health" dans la nav
+
+### 🧹 Nettoyage
+
+- Suppression du dossier `cli/` vide
+- Suppression de `typer` des requirements (jamais utilisé)
+- Imports `routes.py` regroupés en tête de fichier
+- Suppression de l'alias inutile `Request as _Request`
+
 ## [1.0.1] — 2026-06-06
 
 ### 🔧 Correctifs

@@ -1,5 +1,7 @@
 """NodeSnap - Endpoints REST et pages HTML."""
 import logging
+import os
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from fastapi import Request, HTTPException, Form
@@ -7,15 +9,49 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from starlette.status import HTTP_302_FOUND
 
 from api.main import app, templates
-from storage.database import get_connection, upsert_device, save_snapshot
-from storage.users import authenticate
-from storage.audit import log_action
-from core.detector import detect_vendor, VENDOR_TO_NETMIKO
 from collectors.fetcher import fetch_config, SUPPORTED_VENDORS
+from core.detector import detect_vendor, VENDOR_TO_NETMIKO
+from storage.audit import (
+    ACTIONS as AUDIT_ACTIONS,
+    count_recent_failures,
+    list_distinct_users,
+    log_action,
+    purge_old as audit_purge_old,
+    query_audit,
+)
+from storage.credentials import (
+    delete_credentials,
+    get_credentials,
+    has_credentials,
+    store_credentials,
+)
+from storage.database import (
+    get_connection,
+    save_snapshot,
+    update_device_metadata,
+    upsert_device,
+)
+from storage.users import (
+    VALID_ROLES,
+    authenticate,
+    count_admins,
+    create_user as users_create,
+    change_password as users_change_password,
+    delete_user as users_delete,
+    get_session_version,
+    get_user as users_get,
+    list_users,
+    update_user as users_update,
+)
 
 log = logging.getLogger("nodesnap.api.routes")
 
 # Chemins publics qui ne nécessitent PAS d'authentification
+PUBLIC_PATHS = {"/login", "/api/health", "/static", "/favicon.ico"}
+
+# ---- Rate limit du login ----
+LOGIN_MAX_FAILURES = 5    # tentatives dans la fenêtre
+LOGIN_WINDOW_MIN   = 15   # fenêtre en minutes
 
 
 def _client_ip(request: Request) -> str:
@@ -23,7 +59,6 @@ def _client_ip(request: Request) -> str:
     X-Forwarded-For n'est utilisé que si TRUSTED_PROXY=1 est défini, pour
     éviter la falsification des logs d'audit via un header forgé.
     """
-    import os
     if os.environ.get("TRUSTED_PROXY") == "1":
         fwd = request.headers.get("x-forwarded-for")
         if fwd:
@@ -39,16 +74,58 @@ def _safe_next(next_url: str) -> str:
     return next_url or "/"
 
 
-PUBLIC_PATHS = {"/login", "/api/health", "/static", "/favicon.ico"}
+def _require_admin(request: Request):
+    """Vérifie que l'utilisateur courant est admin, sinon lève 403."""
+    user = request.session.get("user")
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    return user
 
 
 # =============================================================================
-# MIDDLEWARE : protection globale des routes
+# MIDDLEWARE : protection CSRF par vérification Origin/Referer
+# =============================================================================
+
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    """Défense CSRF : pour toute requête modifiante, on exige que le header Origin
+    (ou à défaut Referer) corresponde à l'hôte courant. Combiné avec SameSite=Lax,
+    cela bloque les requêtes initiées depuis un autre site."""
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        host = request.headers.get("host", "")
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+
+        def _host_of(url: str) -> str:
+            try:
+                return urlparse(url).netloc
+            except Exception:
+                return ""
+
+        ok = False
+        if origin:
+            ok = _host_of(origin) == host
+        elif referer:
+            ok = _host_of(referer) == host
+
+        if not ok:
+            log.warning(f"CSRF bloqué : method={request.method} path={request.url.path} "
+                        f"origin={origin} referer={referer} host={host}")
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "Requête refusée (CSRF)"},
+            )
+    return await call_next(request)
+
+
+# =============================================================================
+# MIDDLEWARE : protection globale des routes (auth + session_version)
 # =============================================================================
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    """Redirige vers /login si l'utilisateur n'est pas authentifié."""
+    """Redirige vers /login si l'utilisateur n'est pas authentifié,
+    et invalide la session si le mot de passe a été changé entre-temps."""
     path = request.url.path
 
     # Autorise les chemins publics et tout ce qui commence par /static
@@ -59,13 +136,25 @@ async def auth_middleware(request: Request, call_next):
 
     user = request.session.get("user")
     if not user:
-        # Pour les appels API, on renvoie 401 JSON plutôt qu'une redirection
         if path.startswith("/api/"):
             return JSONResponse(
                 status_code=401,
                 content={"success": False, "error": "Authentification requise"},
             )
         return RedirectResponse(url=f"/login?next={path}", status_code=HTTP_302_FOUND)
+
+    # Vérifie que la session_version stockée correspond toujours à celle en base.
+    # Si un admin a changé le mot de passe entre-temps, on déconnecte.
+    sv_session = user.get("session_version")
+    sv_db = get_session_version(user.get("id"))
+    if sv_db is None or sv_session != sv_db:
+        request.session.clear()
+        if path.startswith("/api/"):
+            return JSONResponse(
+                status_code=401,
+                content={"success": False, "error": "Session expirée (mot de passe modifié)"},
+            )
+        return RedirectResponse(url="/login?error=Session+expir%C3%A9e", status_code=HTTP_302_FOUND)
 
     return await call_next(request)
 
@@ -77,7 +166,6 @@ async def auth_middleware(request: Request, call_next):
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, next: str = "/", error: str = ""):
     """Affiche le formulaire de connexion."""
-    # Si déjà connecté, rediriger
     if request.session.get("user"):
         return RedirectResponse(url=_safe_next(next), status_code=HTTP_302_FOUND)
     return templates.TemplateResponse(
@@ -94,8 +182,25 @@ async def login_submit(
     next: str = Form(default="/"),
 ):
     """Traite le formulaire de connexion."""
-    user = authenticate(username, password)
     ip = _client_ip(request)
+
+    # Rate limit : trop d'échecs récents pour ce username/IP -> refus
+    try:
+        failures = count_recent_failures(username, ip, window_minutes=LOGIN_WINDOW_MIN)
+    except Exception as e:
+        log.warning(f"Rate-limit indisponible : {e}")
+        failures = 0
+    if failures >= LOGIN_MAX_FAILURES:
+        log.warning(f"Login bloqué (rate limit) : user={username} ip={ip} failures={failures}")
+        log_action("login_failed", username=username, source="web",
+                   target=username, ip_address=ip, success=False,
+                   details={"reason": "rate_limited", "failures": failures})
+        return RedirectResponse(
+            url=f"/login?error=Trop+de+tentatives.+R%C3%A9essayez+dans+{LOGIN_WINDOW_MIN}+min&next={_safe_next(next)}",
+            status_code=HTTP_302_FOUND,
+        )
+
+    user = authenticate(username, password)
     if not user:
         log.warning(f"Échec authentification : user={username} ip={ip}")
         log_action("login_failed", username=username, source="web",
@@ -104,7 +209,16 @@ async def login_submit(
             url=f"/login?error=Identifiants+invalides&next={_safe_next(next)}",
             status_code=HTTP_302_FOUND,
         )
-    request.session["user"] = {"id": user["id"], "username": user["username"], "role": user["role"]}
+
+    # Régénère la session pour éviter la fixation : on jette tout l'ancien contenu
+    # avant d'écrire le user. Starlette régénère alors la valeur du cookie.
+    request.session.clear()
+    request.session["user"] = {
+        "id": user["id"],
+        "username": user["username"],
+        "role": user["role"],
+        "session_version": user["session_version"],
+    }
     log.info(f"Connexion réussie : {user['username']} ip={ip}")
     log_action("login_success", username=user["username"], source="web",
                target=user["username"], ip_address=ip)
@@ -175,7 +289,6 @@ async def device_detail(request: Request, device_id: int):
             WHERE device_id = ?
             ORDER BY created_at DESC
         """, (device_id,)).fetchall()
-    from storage.credentials import has_credentials, get_credentials
     creds = get_credentials(device_id) if has_credentials(device_id) else None
     return templates.TemplateResponse(
         request, "device.html",
@@ -191,10 +304,58 @@ async def device_detail(request: Request, device_id: int):
 
 @app.get("/scan", response_class=HTMLResponse)
 async def scan_form(request: Request):
-    """Affiche le formulaire de scan d'un équipement."""
+    """Affiche le formulaire de scan d'un équipement (admin only)."""
+    _require_admin(request)
     return templates.TemplateResponse(
         request, "scan.html",
         {"vendors": sorted(SUPPORTED_VENDORS), "user": request.session.get("user")},
+    )
+
+
+@app.get("/devices/{device_id}/snapshots/{snapshot_id}", response_class=HTMLResponse)
+async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
+    """Page de visualisation d'un snapshot avec coloration syntaxique."""
+    with get_connection() as conn:
+        device = conn.execute(
+            "SELECT * FROM devices WHERE id = ?", (device_id,)
+        ).fetchone()
+        if not device:
+            raise HTTPException(status_code=404, detail="Équipement introuvable")
+        snapshot = conn.execute(
+            "SELECT * FROM config_snapshots WHERE id = ? AND device_id = ?",
+            (snapshot_id, device_id),
+        ).fetchone()
+        if not snapshot:
+            raise HTTPException(status_code=404, detail="Snapshot introuvable")
+        prev_snap = conn.execute(
+            "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at < ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (device_id, snapshot["created_at"]),
+        ).fetchone()
+        next_snap = conn.execute(
+            "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at > ? "
+            "ORDER BY created_at ASC LIMIT 1",
+            (device_id, snapshot["created_at"]),
+        ).fetchone()
+        position = conn.execute(
+            "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ? AND created_at > ?",
+            (device_id, snapshot["created_at"]),
+        ).fetchone()["c"] + 1
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()["c"]
+    return templates.TemplateResponse(
+        request, "snapshot_view.html",
+        {
+            "user": request.session.get("user"),
+            "device": device,
+            "snapshot": snapshot,
+            "prev_id": prev_snap["id"] if prev_snap else None,
+            "next_id": next_snap["id"] if next_snap else None,
+            "position": position,
+            "total": total,
+        },
     )
 
 
@@ -204,9 +365,8 @@ async def scan_form(request: Request):
 
 @app.get("/api/health")
 async def api_health():
-    """Endpoint de healthcheck basique (public)."""
-    from version import __version__
-    return {"status": "ok", "service": "nodesnap", "version": __version__}
+    """Endpoint de healthcheck basique (public, sans info sensible)."""
+    return {"status": "ok", "service": "nodesnap"}
 
 
 @app.get("/api/devices")
@@ -308,7 +468,7 @@ async def download_snapshot_json(snapshot_id: int):
 
 
 # =============================================================================
-# API REST JSON - scan (backup à la demande)
+# API REST JSON - scan (backup à la demande, admin only)
 # =============================================================================
 
 @app.post("/api/scan")
@@ -323,6 +483,7 @@ async def api_scan(
     location: str = Form(default=""),
     comment: str = Form(default=""),
 ):
+    _require_admin(request)
     log.info(f"Scan demandé : host={host}, user={username}")
 
     try:
@@ -387,12 +548,13 @@ async def api_scan(
 
 
 # =============================================================================
-# SUPPRESSION d'équipements et de snapshots
+# SUPPRESSION d'équipements et de snapshots (admin only)
 # =============================================================================
 
 @app.post("/devices/{device_id}/delete")
 async def delete_device(request: Request, device_id: int):
     """Supprime un équipement et tous ses snapshots (CASCADE)."""
+    admin = _require_admin(request)
     with get_connection() as conn:
         row = conn.execute(
             "SELECT hostname, ip_address FROM devices WHERE id = ?", (device_id,)
@@ -401,14 +563,20 @@ async def delete_device(request: Request, device_id: int):
             raise HTTPException(status_code=404, detail="Équipement introuvable")
         conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
 
-    user = request.session.get("user", {}).get("username", "?")
-    log.warning(f"[{user}] Suppression équipement : {row['hostname']} ({row['ip_address']})")
+    log.warning(f"[{admin.get('username')}] Suppression équipement : {row['hostname']} ({row['ip_address']})")
+    log_action("device_delete",
+               username=admin.get("username"),
+               source="web",
+               target=f"device:{device_id}",
+               details={"hostname": row["hostname"], "ip": row["ip_address"]},
+               ip_address=_client_ip(request))
     return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
 
 
 @app.post("/devices/{device_id}/snapshots/{snapshot_id}/delete")
 async def delete_snapshot(request: Request, device_id: int, snapshot_id: int):
     """Supprime un snapshot précis d'un équipement."""
+    admin = _require_admin(request)
     with get_connection() as conn:
         row = conn.execute(
             "SELECT device_id FROM config_snapshots WHERE id = ?", (snapshot_id,)
@@ -419,13 +587,17 @@ async def delete_snapshot(request: Request, device_id: int, snapshot_id: int):
             raise HTTPException(status_code=400, detail="Incohérence device/snapshot")
         conn.execute("DELETE FROM config_snapshots WHERE id = ?", (snapshot_id,))
 
-    user = request.session.get("user", {}).get("username", "?")
-    log.warning(f"[{user}] Suppression snapshot #{snapshot_id} (device_id={device_id})")
+    log.warning(f"[{admin.get('username')}] Suppression snapshot #{snapshot_id} (device_id={device_id})")
+    log_action("snapshot_delete",
+               username=admin.get("username"),
+               source="web",
+               target=f"device:{device_id}/snapshot:{snapshot_id}",
+               ip_address=_client_ip(request))
     return RedirectResponse(url=f"/devices/{device_id}", status_code=HTTP_302_FOUND)
 
 
 # =============================================================================
-# RESCAN d'un équipement déjà référencé
+# RESCAN d'un équipement déjà référencé (admin only)
 # =============================================================================
 
 @app.post("/api/devices/{device_id}/rescan")
@@ -437,6 +609,7 @@ async def api_rescan(
     port: int = Form(default=22),
 ):
     """Relance un backup sur un équipement déjà connu."""
+    admin = _require_admin(request)
     with get_connection() as conn:
         device = conn.execute(
             "SELECT * FROM devices WHERE id = ?", (device_id,)
@@ -450,8 +623,7 @@ async def api_rescan(
     host = device["ip_address"]
     vendor = device["vendor"]
     hostname = device["hostname"]
-    session_user = request.session.get("user", {}).get("username", "?")
-    log.info(f"[{session_user}] Rescan demandé : {hostname} ({host}, {vendor})")
+    log.info(f"[{admin.get('username')}] Rescan demandé : {hostname} ({host}, {vendor})")
 
     try:
         result = fetch_config(host, username, password, vendor, port=port)
@@ -476,6 +648,13 @@ async def api_rescan(
         )
 
     log.info(f"Rescan OK : {new_hostname} snapshot #{snapshot_id} ({'nouveau' if is_new else 'inchangé'})")
+    log_action("device_scan",
+               username=admin.get("username"),
+               source="web",
+               target=f"device:{device_id}",
+               details={"hostname": new_hostname, "ip": host, "vendor": vendor,
+                        "snapshot_id": snapshot_id, "is_new": is_new, "via": "rescan"},
+               ip_address=_client_ip(request))
     return JSONResponse({
         "success": True,
         "device_id": device_id,
@@ -490,16 +669,13 @@ async def api_rescan(
 
 
 # =============================================================================
-# API REST JSON - suppression
+# API REST JSON - suppression (admin only)
 # =============================================================================
 
-from fastapi import Request as _Request  # alias pour éviter les conflits
-
-
 @app.delete("/api/devices/{device_id}")
-async def api_delete_device(device_id: int, request: _Request):
+async def api_delete_device(device_id: int, request: Request):
     """Supprime un équipement et tous ses snapshots associés (cascade)."""
-    user = request.session.get("user")
+    admin = _require_admin(request)
     with get_connection() as conn:
         row = conn.execute(
             "SELECT hostname, ip_address FROM devices WHERE id = ?",
@@ -511,10 +687,10 @@ async def api_delete_device(device_id: int, request: _Request):
 
     log.info(
         f"Équipement supprimé : {row['hostname']} ({row['ip_address']}) "
-        f"par user={user.get('username') if user else '?'}"
+        f"par user={admin.get('username')}"
     )
     log_action("device_delete",
-               username=user.get("username") if user else None,
+               username=admin.get("username"),
                source="web",
                target=f"device:{device_id}",
                details={"hostname": row["hostname"], "ip": row["ip_address"]},
@@ -529,21 +705,6 @@ async def api_delete_device(device_id: int, request: _Request):
 # =============================================================================
 # GESTION DES UTILISATEURS (admin only)
 # =============================================================================
-
-from storage.users import (
-    list_users, create_user as users_create, get_user as users_get,
-    update_user as users_update, delete_user as users_delete,
-    change_password as users_change_password, count_admins, VALID_ROLES,
-)
-
-
-def _require_admin(request: Request):
-    """Vérifie que l'utilisateur courant est admin, sinon lève 403."""
-    user = request.session.get("user")
-    if not user or user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
-    return user
-
 
 @app.get("/users", response_class=HTMLResponse)
 async def users_page(request: Request):
@@ -568,13 +729,12 @@ async def api_create_user(
     password: str = Form(...),
     role: str = Form(default="user"),
 ):
-    _require_admin(request)
+    admin = _require_admin(request)
     try:
         uid = users_create(username, password, role)
         log.info(f"Utilisateur créé : {username} (role={role})")
-        admin = request.session.get("user")
         log_action("user_create",
-                   username=admin.get("username") if admin else None,
+                   username=admin.get("username"),
                    source="web", target=f"user:{username}",
                    details={"role": role, "user_id": uid},
                    ip_address=_client_ip(request))
@@ -590,16 +750,25 @@ async def api_update_user(
     username: str = Form(default=""),
     role: str = Form(default=""),
 ):
-    _require_admin(request)
+    admin = _require_admin(request)
     try:
         users_update(user_id, username=username or None, role=role or None)
         log.info(f"Utilisateur #{user_id} mis à jour")
-        admin = request.session.get("user")
         log_action("user_update",
-                   username=admin.get("username") if admin else None,
+                   username=admin.get("username"),
                    source="web", target=f"user:{user_id}",
                    details={"new_username": username or None, "new_role": role or None},
                    ip_address=_client_ip(request))
+        # Si l'admin se met à jour lui-même, on rafraîchit la session
+        if admin.get("id") == user_id:
+            updated = users_get(user_id)
+            if updated:
+                request.session["user"] = {
+                    "id": updated["id"],
+                    "username": updated["username"],
+                    "role": updated["role"],
+                    "session_version": admin.get("session_version"),
+                }
         return JSONResponse({"success": True})
     except ValueError as e:
         return JSONResponse(status_code=422, content={"success": False, "error": str(e)})
@@ -611,15 +780,20 @@ async def api_change_user_password(
     user_id: int,
     password: str = Form(...),
 ):
-    _require_admin(request)
+    admin = _require_admin(request)
     try:
         users_change_password(user_id, password)
         log.info(f"Mot de passe modifié pour user #{user_id}")
-        admin = request.session.get("user")
         log_action("user_password",
-                   username=admin.get("username") if admin else None,
+                   username=admin.get("username"),
                    source="web", target=f"user:{user_id}",
                    ip_address=_client_ip(request))
+        # Si l'admin change son propre mot de passe, on resynchronise sa session_version
+        # pour qu'elle reste valide (sinon il serait déconnecté au prochain hit).
+        if admin.get("id") == user_id:
+            new_sv = get_session_version(user_id)
+            if new_sv is not None:
+                request.session["user"] = {**admin, "session_version": new_sv}
         return JSONResponse({"success": True})
     except ValueError as e:
         return JSONResponse(status_code=422, content={"success": False, "error": str(e)})
@@ -653,9 +827,6 @@ async def api_delete_user(request: Request, user_id: int):
 # =============================================================================
 # AUDIT - consultation du journal (admin only)
 # =============================================================================
-
-from storage.audit import query_audit, list_distinct_users, ACTIONS as AUDIT_ACTIONS
-
 
 @app.get("/audit", response_class=HTMLResponse)
 async def audit_page(
@@ -721,10 +892,6 @@ async def api_audit_list(
 # AUDIT - purge (admin only)
 # =============================================================================
 
-from storage.audit import purge_old as audit_purge_old
-from datetime import datetime, timedelta
-
-
 @app.get("/api/audit/purge/preview")
 async def api_audit_purge_preview(request: Request, days: int = 90):
     """Retourne le nombre d'entrées qui seraient supprimées pour N jours de rétention."""
@@ -752,7 +919,6 @@ async def api_audit_purge(request: Request, days: int = Form(...)):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
     log.info(f"Purge audit : {deleted} entrée(s) supprimée(s) (rétention {days}j) par {admin.get('username')}")
-    # Méta-audit : on trace la purge elle-même
     log_action(
         "audit_purge",
         username=admin.get("username"),
@@ -765,11 +931,8 @@ async def api_audit_purge(request: Request, days: int = Form(...)):
 
 
 # =============================================================================
-# API REST - modification des métadonnées d'un équipement
+# API REST - modification des métadonnées d'un équipement (admin only)
 # =============================================================================
-
-from storage.database import update_device_metadata
-
 
 @app.post("/api/devices/{device_id}/metadata")
 async def api_update_device_metadata(
@@ -780,9 +943,8 @@ async def api_update_device_metadata(
     comment: str = Form(default=""),
 ):
     """Met à jour les métadonnées d'un équipement (nom perso, localisation, commentaire)."""
-    user = request.session.get("user")
+    admin = _require_admin(request)
 
-    # Vérifier l'existence de l'équipement
     with get_connection() as conn:
         row = conn.execute(
             "SELECT id, hostname, ip_address, common_name, location, comment FROM devices WHERE id = ?",
@@ -791,8 +953,6 @@ async def api_update_device_metadata(
     if not row:
         raise HTTPException(status_code=404, detail="Équipement introuvable")
 
-    # Normaliser : chaîne vide -> chaîne vide (= effacer), sinon valeur
-    # Les 3 champs sont toujours fournis par le form (default=""), donc on les applique tous
     try:
         updated = update_device_metadata(
             device_id,
@@ -806,14 +966,13 @@ async def api_update_device_metadata(
 
     log.info(
         f"Métadonnées mises à jour : device #{device_id} ({row['hostname']}) "
-        f"par user={user.get('username') if user else '?'}"
+        f"par user={admin.get('username')}"
     )
 
-    # Audit : on trace la modification avec l'ancien et le nouveau
     try:
         log_action(
             "device_update",
-            username=user.get("username") if user else None,
+            username=admin.get("username"),
             source="web",
             target=f"device:{device_id}",
             details={
@@ -842,63 +1001,9 @@ async def api_update_device_metadata(
     })
 
 
-@app.get("/devices/{device_id}/snapshots/{snapshot_id}", response_class=HTMLResponse)
-async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
-    """Page de visualisation d'un snapshot avec coloration syntaxique."""
-    with get_connection() as conn:
-        device = conn.execute(
-            "SELECT * FROM devices WHERE id = ?", (device_id,)
-        ).fetchone()
-        if not device:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
-        snapshot = conn.execute(
-            "SELECT * FROM config_snapshots WHERE id = ? AND device_id = ?",
-            (snapshot_id, device_id),
-        ).fetchone()
-        if not snapshot:
-            raise HTTPException(status_code=404, detail="Snapshot introuvable")
-        # Snapshot précédent / suivant (dans le temps pour ce device)
-        prev_snap = conn.execute(
-            "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at < ? "
-            "ORDER BY created_at DESC LIMIT 1",
-            (device_id, snapshot["created_at"]),
-        ).fetchone()
-        next_snap = conn.execute(
-            "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at > ? "
-            "ORDER BY created_at ASC LIMIT 1",
-            (device_id, snapshot["created_at"]),
-        ).fetchone()
-        # Position dans l'historique total
-        position = conn.execute(
-            "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ? AND created_at > ?",
-            (device_id, snapshot["created_at"]),
-        ).fetchone()["c"] + 1
-        total = conn.execute(
-            "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ?",
-            (device_id,),
-        ).fetchone()["c"]
-    return templates.TemplateResponse(
-        request, "snapshot_view.html",
-        {
-            "user": request.session.get("user"),
-            "device": device,
-            "snapshot": snapshot,
-            "prev_id": prev_snap["id"] if prev_snap else None,
-            "next_id": next_snap["id"] if next_snap else None,
-            "position": position,
-            "total": total,
-        },
-    )
-
-
-
 # =============================================================================
-# PLANIFICATION (admin only pour modification, lecture pour tous les users)
+# PLANIFICATION (admin only)
 # =============================================================================
-
-from storage.credentials import store_credentials, get_credentials, delete_credentials, has_credentials
-from datetime import datetime as _dt, timedelta as _td
-
 
 @app.post("/api/devices/{device_id}/schedule")
 async def api_set_schedule(
@@ -908,7 +1013,7 @@ async def api_set_schedule(
     interval_minutes: int = Form(...),
 ):
     """Active/désactive la planification et définit l'intervalle (en minutes)."""
-    user = request.session.get("user")
+    admin = _require_admin(request)
     if interval_minutes < 1:
         return JSONResponse(status_code=422, content={"success": False, "error": "Intervalle minimum 1 minute."})
 
@@ -916,7 +1021,7 @@ async def api_set_schedule(
         row = conn.execute("SELECT id, hostname FROM devices WHERE id = ?", (device_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Équipement introuvable")
-        next_run = (_dt.now() + _td(minutes=interval_minutes)).isoformat(timespec="seconds") if enabled else None
+        next_run = (datetime.now() + timedelta(minutes=interval_minutes)).isoformat(timespec="seconds") if enabled else None
         conn.execute(
             "UPDATE devices SET schedule_enabled=?, schedule_interval_minutes=?, "
             "schedule_next_run=?, schedule_fail_count=0 WHERE id=?",
@@ -925,7 +1030,7 @@ async def api_set_schedule(
 
     log.info(f"Planification {'activée' if enabled else 'désactivée'} pour device #{device_id} (interval={interval_minutes}min)")
     log_action("schedule_update",
-               username=user.get("username") if user else None,
+               username=admin.get("username"),
                source="web", target=f"device:{device_id}",
                details={"enabled": bool(enabled), "interval_minutes": interval_minutes},
                ip_address=_client_ip(request))
@@ -941,7 +1046,7 @@ async def api_set_credentials(
     password: str = Form(...),
 ):
     """Stocke (chiffré) les credentials d'un équipement pour les scans planifiés."""
-    user = request.session.get("user")
+    admin = _require_admin(request)
     with get_connection() as conn:
         row = conn.execute("SELECT id FROM devices WHERE id = ?", (device_id,)).fetchone()
         if not row:
@@ -955,7 +1060,7 @@ async def api_set_credentials(
 
     log.info(f"Credentials mis à jour pour device #{device_id}")
     log_action("credentials_update",
-               username=user.get("username") if user else None,
+               username=admin.get("username"),
                source="web", target=f"device:{device_id}",
                details={"ssh_username": username},
                ip_address=_client_ip(request))
@@ -965,16 +1070,15 @@ async def api_set_credentials(
 @app.delete("/api/devices/{device_id}/credentials")
 async def api_delete_credentials(request: Request, device_id: int):
     """Supprime les credentials stockés et désactive la planification."""
-    user = request.session.get("user")
+    admin = _require_admin(request)
     deleted = delete_credentials(device_id)
-    # Désactive aussi la planification puisqu'on ne peut plus se connecter
     with get_connection() as conn:
         conn.execute(
             "UPDATE devices SET schedule_enabled=0, schedule_next_run=NULL WHERE id=?",
             (device_id,),
         )
     log_action("credentials_delete",
-               username=user.get("username") if user else None,
+               username=admin.get("username"),
                source="web", target=f"device:{device_id}",
                ip_address=_client_ip(request))
     return JSONResponse({"success": True, "deleted": deleted})
@@ -983,7 +1087,7 @@ async def api_delete_credentials(request: Request, device_id: int):
 @app.post("/api/devices/{device_id}/run-now")
 async def api_run_now(request: Request, device_id: int):
     """Force un run immédiat en mettant schedule_next_run à maintenant."""
-    user = request.session.get("user")
+    admin = _require_admin(request)
     with get_connection() as conn:
         row = conn.execute(
             "SELECT id, hostname, schedule_enabled FROM devices WHERE id = ?", (device_id,)
@@ -993,8 +1097,7 @@ async def api_run_now(request: Request, device_id: int):
         if not has_credentials(device_id):
             return JSONResponse(status_code=422,
                 content={"success": False, "error": "Aucun credential stocké pour cet équipement."})
-        # Force le run et s'assure que la planification est active
-        now = _dt.now().isoformat(timespec="seconds")
+        now = datetime.now().isoformat(timespec="seconds")
         conn.execute(
             "UPDATE devices SET schedule_next_run=?, schedule_fail_count=0, schedule_enabled=1 WHERE id=?",
             (now, device_id),
@@ -1002,7 +1105,7 @@ async def api_run_now(request: Request, device_id: int):
 
     log.info(f"Run immédiat demandé pour device #{device_id}")
     log_action("schedule_run_now",
-               username=user.get("username") if user else None,
+               username=admin.get("username"),
                source="web", target=f"device:{device_id}",
                ip_address=_client_ip(request))
     return JSONResponse({"success": True, "message": "Le scan sera lancé dans les 60 prochaines secondes."})

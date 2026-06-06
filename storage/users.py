@@ -10,14 +10,18 @@ from storage.database import get_connection, init_db
 # Hash constant utilisé pour l'anti-timing-attack dans authenticate()
 _DUMMY_HASH = bcrypt.hashpw(b"nodesnap_dummy_timing_guard", bcrypt.gensalt())
 
+# Flag d'init pour éviter de re-créer/migrer la table à chaque appel
+_INITIALIZED = False
+
 USERS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL DEFAULT 'user',
-    created_at    TEXT NOT NULL,
-    last_login    TEXT
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,
+    role            TEXT NOT NULL DEFAULT 'user',
+    created_at      TEXT NOT NULL,
+    last_login      TEXT,
+    session_version INTEGER NOT NULL DEFAULT 1
 );
 """
 
@@ -26,19 +30,25 @@ VALID_ROLES = ("admin", "user")
 
 def init_users_table():
     """Crée la table users + migre l'existant si besoin + promeut le 1er user en admin."""
+    global _INITIALIZED
+    if _INITIALIZED:
+        return
     init_db()
     with get_connection() as conn:
         conn.executescript(USERS_SCHEMA)
-        # Migration : si la colonne 'role' n'existe pas (ancienne base), on l'ajoute
+        # Migration : colonnes ajoutées au fil du temps
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
         if "role" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+        if "session_version" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1")
         # Si aucun admin n'existe et qu'il y a au moins un utilisateur, le plus ancien devient admin
         admin_count = conn.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'admin'").fetchone()["c"]
         if admin_count == 0:
             first = conn.execute("SELECT id FROM users ORDER BY id ASC LIMIT 1").fetchone()
             if first:
                 conn.execute("UPDATE users SET role = 'admin' WHERE id = ?", (first["id"],))
+    _INITIALIZED = True
 
 
 def hash_password(plain: str) -> str:
@@ -75,7 +85,8 @@ def authenticate(username: str, password: str) -> dict | None:
     init_users_table()
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role, session_version "
+            "FROM users WHERE username = ?",
             (username,),
         ).fetchone()
         if not row:
@@ -87,7 +98,21 @@ def authenticate(username: str, password: str) -> dict | None:
             "UPDATE users SET last_login = ? WHERE id = ?",
             (datetime.now().isoformat(timespec="seconds"), row["id"]),
         )
-    return {"id": row["id"], "username": row["username"], "role": row["role"]}
+    return {
+        "id": row["id"],
+        "username": row["username"],
+        "role": row["role"],
+        "session_version": row["session_version"],
+    }
+
+
+def get_session_version(user_id: int) -> int | None:
+    """Retourne la version de session courante d'un utilisateur (None si inexistant)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT session_version FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return row["session_version"] if row else None
 
 
 def list_users():
@@ -145,11 +170,13 @@ def update_user(user_id: int, username: str = None, role: str = None) -> bool:
 
 
 def change_password(user_id: int, new_password: str) -> bool:
+    """Change le mot de passe et incrémente session_version pour invalider les sessions actives."""
     if len(new_password) < 8:
         raise ValueError("Le mot de passe doit faire au moins 8 caractères.")
     with get_connection() as conn:
         cur = conn.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
+            "UPDATE users SET password_hash = ?, "
+            "session_version = session_version + 1 WHERE id = ?",
             (hash_password(new_password), user_id),
         )
         return cur.rowcount > 0

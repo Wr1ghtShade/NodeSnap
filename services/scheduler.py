@@ -2,7 +2,7 @@
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from datetime import datetime, timedelta
 
 from storage.database import get_connection, upsert_device, save_snapshot
@@ -17,6 +17,7 @@ log = logging.getLogger("nodesnap.scheduler")
 TICK_SECONDS    = 60     # vérification toutes les 60 secondes
 MAX_CONCURRENT  = 5      # nombre max de scans en parallèle
 MAX_FAILURES    = 3      # désactivation auto après N échecs consécutifs
+SCAN_TIMEOUT    = 600    # timeout dur d'un scan (10 min) — évite de bloquer un slot du pool
 
 _stop_event = threading.Event()
 _worker_thread = None
@@ -47,38 +48,50 @@ def _fetch_due_devices():
 
 
 def _mark_run_result(device_id: int, success: bool, interval_minutes: int):
-    """Met à jour les colonnes de planification après un run."""
+    """Met à jour les colonnes de planification après un run.
+    Utilise BEGIN IMMEDIATE pour garantir l'atomicité SELECT+UPDATE du compteur d'échecs
+    face à un éventuel autre thread (rescan manuel concurrent par exemple)."""
     now = _now_iso()
     with get_connection() as conn:
-        if success:
-            conn.execute(
-                "UPDATE devices SET schedule_last_run=?, schedule_last_status='success', "
-                "schedule_fail_count=0, schedule_next_run=? WHERE id=?",
-                (now, _compute_next_run(interval_minutes), device_id),
-            )
-        else:
-            row = conn.execute(
-                "SELECT schedule_fail_count FROM devices WHERE id=?", (device_id,)
-            ).fetchone()
-            new_fail = (row["schedule_fail_count"] or 0) + 1
-            if new_fail >= MAX_FAILURES:
+        conn.isolation_level = None  # mode autocommit manuel pour contrôler la transaction
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if success:
                 conn.execute(
-                    "UPDATE devices SET schedule_last_run=?, schedule_last_status='failed', "
-                    "schedule_fail_count=?, schedule_enabled=0, schedule_next_run=NULL "
-                    "WHERE id=?",
-                    (now, new_fail, device_id),
+                    "UPDATE devices SET schedule_last_run=?, schedule_last_status='success', "
+                    "schedule_fail_count=0, schedule_next_run=? WHERE id=?",
+                    (now, _compute_next_run(interval_minutes), device_id),
                 )
-                log.warning(f"Device #{device_id} : {new_fail} échecs consécutifs, planification désactivée.")
-                log_action("schedule_auto_disabled", username="system", source="scheduler",
-                           target=f"device:{device_id}",
-                           details={"fail_count": new_fail, "max": MAX_FAILURES},
-                           success=False)
             else:
-                conn.execute(
-                    "UPDATE devices SET schedule_last_run=?, schedule_last_status='failed', "
-                    "schedule_fail_count=?, schedule_next_run=? WHERE id=?",
-                    (now, new_fail, _compute_next_run(interval_minutes), device_id),
-                )
+                row = conn.execute(
+                    "SELECT schedule_fail_count FROM devices WHERE id=?", (device_id,)
+                ).fetchone()
+                new_fail = (row["schedule_fail_count"] or 0) + 1
+                if new_fail >= MAX_FAILURES:
+                    conn.execute(
+                        "UPDATE devices SET schedule_last_run=?, schedule_last_status='failed', "
+                        "schedule_fail_count=?, schedule_enabled=0, schedule_next_run=NULL "
+                        "WHERE id=?",
+                        (now, new_fail, device_id),
+                    )
+                    log.warning(f"Device #{device_id} : {new_fail} échecs consécutifs, planification désactivée.")
+                    # log_action en dehors de la transaction (commit d'abord)
+                    conn.execute("COMMIT")
+                    log_action("schedule_auto_disabled", username="system", source="scheduler",
+                               target=f"device:{device_id}",
+                               details={"fail_count": new_fail, "max": MAX_FAILURES},
+                               success=False)
+                    return
+                else:
+                    conn.execute(
+                        "UPDATE devices SET schedule_last_run=?, schedule_last_status='failed', "
+                        "schedule_fail_count=?, schedule_next_run=? WHERE id=?",
+                        (now, new_fail, _compute_next_run(interval_minutes), device_id),
+                    )
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
 
 
 def _run_scheduled_scan(device: dict):
@@ -143,6 +156,33 @@ def _run_scheduled_scan(device: dict):
     _mark_run_result(device_id, success=True, interval_minutes=interval)
 
 
+def _run_with_timeout(device: dict):
+    """Wrapper qui exécute _run_scheduled_scan avec un timeout dur.
+    Si Netmiko se bloque (équipement qui ne répond plus en cours de session),
+    le slot du pool est libéré et le device passe en échec.
+    Note : le thread interne reste vivant (Python ne peut pas tuer un thread),
+    mais le pool reste utilisable. Le thread mort se nettoiera au prochain redémarrage."""
+    device_id = device["id"]
+    interval = device["schedule_interval_minutes"] or 1440
+    # On utilise un sous-executor à 1 thread pour avoir Future.result(timeout)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"ns-scan-{device_id}") as ex:
+        future = ex.submit(_run_scheduled_scan, device)
+        try:
+            future.result(timeout=SCAN_TIMEOUT)
+        except FuturesTimeout:
+            log.error(f"[scheduler] Scan device #{device_id} dépassé ({SCAN_TIMEOUT}s), abandon")
+            log_action("device_scan", username="system", source="scheduler",
+                       target=f"device:{device_id}",
+                       details={"reason": f"timeout after {SCAN_TIMEOUT}s"},
+                       success=False)
+            try:
+                _mark_run_result(device_id, success=False, interval_minutes=interval)
+            except Exception as e:
+                log.error(f"[scheduler] Échec du mark_run_result après timeout : {e}")
+        except Exception as e:
+            log.error(f"[scheduler] Exception non gérée pour device #{device_id} : {e}")
+
+
 def _scheduler_loop():
     """Boucle principale du scheduler. Tourne dans un thread d'arrière-plan."""
     global _executor
@@ -163,7 +203,7 @@ def _scheduler_loop():
                             "UPDATE devices SET schedule_next_run=? WHERE id=?",
                             (_compute_next_run(interval), device["id"]),
                         )
-                    _executor.submit(_run_scheduled_scan, device)
+                    _executor.submit(_run_with_timeout, device)
         except Exception as e:
             log.error(f"[scheduler] Erreur dans la boucle : {e}")
         _stop_event.wait(TICK_SECONDS)

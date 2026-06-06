@@ -6,6 +6,8 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "nodesnap.db"
 
+_INITIALIZED = False
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,10 +68,14 @@ def _migrate_devices(conn):
 
 
 def init_db():
-    """Initialise la base et applique les migrations. Idempotent."""
+    """Initialise la base et applique les migrations. Idempotent et caché en mémoire."""
+    global _INITIALIZED
+    if _INITIALIZED:
+        return DB_PATH
     with get_connection() as conn:
         conn.executescript(SCHEMA)
         _migrate_devices(conn)
+    _INITIALIZED = True
     return DB_PATH
 
 

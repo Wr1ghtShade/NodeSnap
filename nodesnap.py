@@ -42,6 +42,7 @@ import argparse
 import getpass
 import logging
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -92,13 +93,27 @@ def parse_args():
     return parser.parse_args()
 
 
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _sanitize(value: str, max_len: int = 64) -> str:
+    """Nettoie une chaîne pour usage en nom de fichier (anti path traversal)."""
+    if not value:
+        return "unknown"
+    cleaned = _SAFE_FILENAME_RE.sub("_", value)[:max_len]
+    return cleaned or "unknown"
+
+
 def save_to_file(host: str, hostname: str, vendor: str, config: str, output_dir: str) -> Path:
-    """Sauvegarde la config dans un fichier horodaté."""
-    output_path = Path(output_dir)
+    """Sauvegarde la config dans un fichier horodaté (nom de fichier sanitizé)."""
+    output_path = Path(output_dir).resolve()
     output_path.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_name = hostname.replace("/", "_").replace(" ", "_")
-    filename = output_path / f"{safe_name}_{host}_{vendor}_{ts}.cfg"
+    parts = [_sanitize(hostname), _sanitize(host), _sanitize(vendor), ts]
+    filename = output_path / (f"{'_'.join(parts)}.cfg")
+    # Garde-fou : le fichier doit bien rester sous output_path
+    if not str(filename.resolve()).startswith(str(output_path)):
+        raise ValueError("Chemin de sortie invalide")
     filename.write_text(config, encoding="utf-8")
     return filename
 
