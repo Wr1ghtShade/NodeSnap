@@ -96,6 +96,22 @@ Créer le premier utilisateur admin (le mot de passe est demandé en interactif)
 python -m storage.users create <username> admin
 ```
 
+### ⏱️ Backups automatiques
+
+NodeSnap intègre un scheduler qui tourne en arrière-plan et déclenche automatiquement les backups selon un intervalle configuré par équipement.
+
+**Configuration via l'interface web (page de détail d'un équipement) :**
+
+1. Stocker les credentials SSH de l'équipement *(onglet Planification)*
+2. Activer la planification et définir l'intervalle en minutes
+3. Optionnel : déclencher un run immédiat avec le bouton **Run maintenant**
+
+**Comportement :**
+- Le scheduler vérifie les équipements à scanner toutes les **60 secondes**
+- Un snapshot n'est créé que si la configuration a **changé** depuis le dernier backup (déduplication SHA-256)
+- Après **3 échecs consécutifs**, la planification est automatiquement désactivée et une entrée d'audit est créée
+- Maximum **5 scans en parallèle** simultanément
+
 ### CLI (scan ponctuel)
 
 ```bash
