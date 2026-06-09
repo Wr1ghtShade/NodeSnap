@@ -1,7 +1,8 @@
 # 🔷 NodeSnap
 
-Outil de sauvegarde de configurations d'équipements réseau multi-vendor.  
-Stocke les snapshots en SQLite, détecte les changements, et expose une interface web ainsi qu'une API REST.
+**🌍 Langue :** **🇫🇷 Français** · [🇬🇧 English](README.en.md)
+
+🛡️ Outil de sauvegarde de configurations d'équipements réseau multi-vendor. 📸 Stocke les snapshots en SQLite, détecte les changements, et expose une 🌐 interface web ainsi qu'une 🔌 API REST.
 
 ## 📸 Aperçu
 
