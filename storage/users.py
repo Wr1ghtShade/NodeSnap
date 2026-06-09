@@ -63,17 +63,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_user(username: str, password: str, role: str = "user") -> int:
-    """Crée un nouvel utilisateur. Retourne son id. Lève ValueError en cas de conflit."""
+    """Crée un nouvel utilisateur. Retourne son id. Lève ValueError(code, **params)
+    où code est une clé i18n (err.*). Le formatage est fait côté route."""
     if role not in VALID_ROLES:
-        raise ValueError(f"Rôle invalide : {role}")
+        raise ValueError(f"err.invalid_role|role={role}")
     if len(password) < 8:
-        raise ValueError("Le mot de passe doit faire au moins 8 caractères.")
+        raise ValueError("err.password_too_short")
     init_users_table()
     now = datetime.now().isoformat(timespec="seconds")
     with get_connection() as conn:
         existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
         if existing:
-            raise ValueError(f"L'utilisateur '{username}' existe déjà.")
+            raise ValueError(f"err.user_exists|username={username}")
         cur = conn.execute(
             "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
             (username, hash_password(password), role, now),
@@ -140,22 +141,20 @@ def update_user(user_id: int, username: str = None, role: str = None) -> bool:
     """Modifie un utilisateur. Empêche de retirer le dernier admin."""
     user = get_user(user_id)
     if not user:
-        raise ValueError("Utilisateur introuvable.")
+        raise ValueError("err.user_not_found")
     if role and role not in VALID_ROLES:
-        raise ValueError(f"Rôle invalide : {role}")
-    # Garde-fou : impossible de retirer le dernier admin
+        raise ValueError(f"err.invalid_role|role={role}")
     if role and user["role"] == "admin" and role != "admin" and count_admins() <= 1:
-        raise ValueError("Impossible de retirer le dernier compte administrateur.")
+        raise ValueError("err.last_admin_demote")
     fields, values = [], []
     if username:
-        # Vérifie qu'aucun autre user n'a déjà ce username
         with get_connection() as conn:
             other = conn.execute(
                 "SELECT id FROM users WHERE username = ? AND id != ?",
                 (username, user_id),
             ).fetchone()
         if other:
-            raise ValueError(f"Le nom d'utilisateur '{username}' est déjà pris.")
+            raise ValueError(f"err.username_taken|username={username}")
         fields.append("username = ?")
         values.append(username)
     if role:
@@ -172,7 +171,7 @@ def update_user(user_id: int, username: str = None, role: str = None) -> bool:
 def change_password(user_id: int, new_password: str) -> bool:
     """Change le mot de passe et incrémente session_version pour invalider les sessions actives."""
     if len(new_password) < 8:
-        raise ValueError("Le mot de passe doit faire au moins 8 caractères.")
+        raise ValueError("err.password_too_short")
     with get_connection() as conn:
         cur = conn.execute(
             "UPDATE users SET password_hash = ?, "
@@ -195,7 +194,7 @@ def delete_user(user_id: int) -> bool:
     if not user:
         return False
     if user["role"] == "admin" and count_admins() <= 1:
-        raise ValueError("Impossible de supprimer le dernier compte administrateur.")
+        raise ValueError("err.last_admin_delete")
     with get_connection() as conn:
         cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return cur.rowcount > 0
@@ -236,7 +235,12 @@ def _cli():
             uid = create_user(username, pwd1, role)
             print(f"Utilisateur '{username}' créé (id={uid}, role={role}).")
         except ValueError as e:
-            print(f"Erreur : {e}")
+            # Format "err.code|param=value" → message lisible en FR
+            from api.i18n import t as _t, load_translations
+            load_translations()
+            code, _, params = str(e).partition("|")
+            kwargs = dict(p.split("=", 1) for p in params.split(",") if "=" in p) if params else {}
+            print(f"Erreur : {_t(code, 'fr', **kwargs)}")
             sys.exit(3)
 
     elif cmd == "passwd":
@@ -258,7 +262,12 @@ def _cli():
             change_password(row["id"], pwd1)
             print(f"Mot de passe de '{username}' mis à jour.")
         except ValueError as e:
-            print(f"Erreur : {e}")
+            # Format "err.code|param=value" → message lisible en FR
+            from api.i18n import t as _t, load_translations
+            load_translations()
+            code, _, params = str(e).partition("|")
+            kwargs = dict(p.split("=", 1) for p in params.split(",") if "=" in p) if params else {}
+            print(f"Erreur : {_t(code, 'fr', **kwargs)}")
             sys.exit(3)
 
     elif cmd in ("promote", "demote"):
@@ -276,7 +285,12 @@ def _cli():
             update_user(row["id"], role=new_role)
             print(f"'{username}' est maintenant {new_role}.")
         except ValueError as e:
-            print(f"Erreur : {e}")
+            # Format "err.code|param=value" → message lisible en FR
+            from api.i18n import t as _t, load_translations
+            load_translations()
+            code, _, params = str(e).partition("|")
+            kwargs = dict(p.split("=", 1) for p in params.split(",") if "=" in p) if params else {}
+            print(f"Erreur : {_t(code, 'fr', **kwargs)}")
             sys.exit(3)
 
     elif cmd == "delete":
@@ -293,7 +307,12 @@ def _cli():
             if delete_user(row["id"]):
                 print(f"Utilisateur '{username}' supprimé.")
         except ValueError as e:
-            print(f"Erreur : {e}")
+            # Format "err.code|param=value" → message lisible en FR
+            from api.i18n import t as _t, load_translations
+            load_translations()
+            code, _, params = str(e).partition("|")
+            kwargs = dict(p.split("=", 1) for p in params.split(",") if "=" in p) if params else {}
+            print(f"Erreur : {_t(code, 'fr', **kwargs)}")
             sys.exit(3)
 
     else:

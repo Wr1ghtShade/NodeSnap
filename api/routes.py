@@ -8,8 +8,14 @@ from fastapi import Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from starlette.status import HTTP_302_FOUND
 
-from api.main import app, render, templates
-from api.i18n import COOKIE_NAME as LANG_COOKIE, SUPPORTED as LANGS_SUPPORTED, DEFAULT as LANG_DEFAULT
+from api.main import app, render, templates, HTTPS_ONLY
+from api.i18n import (
+    COOKIE_NAME as LANG_COOKIE,
+    SUPPORTED as LANGS_SUPPORTED,
+    DEFAULT as LANG_DEFAULT,
+    get_lang,
+    t as i18n_t,
+)
 from collectors.fetcher import fetch_config, SUPPORTED_VENDORS
 from core.detector import detect_vendor, VENDOR_TO_NETMIKO
 from storage.audit import (
@@ -75,11 +81,37 @@ def _safe_next(next_url: str) -> str:
     return next_url or "/"
 
 
+def _t(request: Request, key: str, **kwargs) -> str:
+    """Raccourci : traduit une clé selon la langue préférée du client."""
+    return i18n_t(key, get_lang(request), **kwargs)
+
+
+def _translate_value_error(request: Request, err: ValueError) -> str:
+    """Parse 'err.code|k=v,k2=v2' levé par la couche storage et retourne le message traduit.
+    Si le format ne correspond pas, retourne la string brute."""
+    raw = str(err)
+    code, sep, params = raw.partition("|")
+    if not code.startswith("err."):
+        return raw  # message libre, on retourne tel quel
+    kwargs = {}
+    if params:
+        for pair in params.split(","):
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                kwargs[k] = v
+    return _t(request, code, **kwargs)
+
+
+def _http(request: Request, status: int, key: str, **kwargs):
+    """Lève HTTPException avec un detail traduit (clé i18n)."""
+    raise HTTPException(status_code=status, detail=_t(request, key, **kwargs))
+
+
 def _require_admin(request: Request):
     """Vérifie que l'utilisateur courant est admin, sinon lève 403."""
     user = request.session.get("user")
     if not user or user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+        raise HTTPException(status_code=403, detail=_t(request, "err.admin_only"))
     return user
 
 
@@ -114,7 +146,7 @@ async def csrf_middleware(request: Request, call_next):
                         f"origin={origin} referer={referer} host={host}")
             return JSONResponse(
                 status_code=403,
-                content={"success": False, "error": "Requête refusée (CSRF)"},
+                content={"success": False, "error": _t(request, "err.csrf")},
             )
     return await call_next(request)
 
@@ -140,7 +172,7 @@ async def auth_middleware(request: Request, call_next):
         if path.startswith("/api/"):
             return JSONResponse(
                 status_code=401,
-                content={"success": False, "error": "Authentification requise"},
+                content={"success": False, "error": _t(request, "err.auth_required")},
             )
         return RedirectResponse(url=f"/login?next={path}", status_code=HTTP_302_FOUND)
 
@@ -153,9 +185,9 @@ async def auth_middleware(request: Request, call_next):
         if path.startswith("/api/"):
             return JSONResponse(
                 status_code=401,
-                content={"success": False, "error": "Session expirée (mot de passe modifié)"},
+                content={"success": False, "error": _t(request, "err.session_expired")},
             )
-        return RedirectResponse(url="/login?error=Session+expir%C3%A9e", status_code=HTTP_302_FOUND)
+        return RedirectResponse(url="/login?error_code=session_expired", status_code=HTTP_302_FOUND)
 
     return await call_next(request)
 
@@ -165,13 +197,18 @@ async def auth_middleware(request: Request, call_next):
 # =============================================================================
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, next: str = "/", error: str = ""):
-    """Affiche le formulaire de connexion."""
+async def login_page(request: Request, next: str = "/", error_code: str = "", minutes: int = 0):
+    """Affiche le formulaire de connexion.
+    error_code : clé i18n login.error_<code> traduite côté template."""
     if request.session.get("user"):
         return RedirectResponse(url=_safe_next(next), status_code=HTTP_302_FOUND)
+    error_msg = ""
+    if error_code:
+        kwargs = {"minutes": minutes} if minutes else {}
+        error_msg = _t(request, f"login.error_{error_code}", **kwargs)
     return render(
         request, "login.html",
-        {"next": next, "error": error},
+        {"next": next, "error": error_msg},
     )
 
 
@@ -197,7 +234,7 @@ async def login_submit(
                    target=username, ip_address=ip, success=False,
                    details={"reason": "rate_limited", "failures": failures})
         return RedirectResponse(
-            url=f"/login?error=Trop+de+tentatives.+R%C3%A9essayez+dans+{LOGIN_WINDOW_MIN}+min&next={_safe_next(next)}",
+            url=f"/login?error_code=rate_limited&minutes={LOGIN_WINDOW_MIN}&next={_safe_next(next)}",
             status_code=HTTP_302_FOUND,
         )
 
@@ -207,7 +244,7 @@ async def login_submit(
         log_action("login_failed", username=username, source="web",
                    target=username, ip_address=ip, success=False)
         return RedirectResponse(
-            url=f"/login?error=Identifiants+invalides&next={_safe_next(next)}",
+            url=f"/login?error_code=invalid_credentials&next={_safe_next(next)}",
             status_code=HTTP_302_FOUND,
         )
 
@@ -283,7 +320,7 @@ async def device_detail(request: Request, device_id: int):
             "SELECT * FROM devices WHERE id = ?", (device_id,)
         ).fetchone()
         if not device:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         snapshots = conn.execute("""
             SELECT id, sha256, size_bytes, created_at
             FROM config_snapshots
@@ -321,13 +358,13 @@ async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
             "SELECT * FROM devices WHERE id = ?", (device_id,)
         ).fetchone()
         if not device:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         snapshot = conn.execute(
             "SELECT * FROM config_snapshots WHERE id = ? AND device_id = ?",
             (snapshot_id, device_id),
         ).fetchone()
         if not snapshot:
-            raise HTTPException(status_code=404, detail="Snapshot introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
         prev_snap = conn.execute(
             "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at < ? "
             "ORDER BY created_at DESC LIMIT 1",
@@ -379,7 +416,7 @@ async def api_set_lang(request: Request, lang: str = Form(...)):
     response.set_cookie(
         key=LANG_COOKIE, value=lang,
         max_age=60 * 60 * 24 * 365,  # 1 an
-        samesite="lax", httponly=False, secure=False, path="/",
+        samesite="lax", httponly=False, secure=HTTPS_ONLY, path="/",
     )
     return response
 
@@ -406,7 +443,7 @@ async def api_device_detail(device_id: int):
             "SELECT * FROM devices WHERE id = ?", (device_id,)
         ).fetchone()
         if not device:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         snapshots = conn.execute("""
             SELECT id, sha256, size_bytes, created_at
             FROM config_snapshots
@@ -426,7 +463,7 @@ async def api_snapshot_raw(snapshot_id: int):
             "SELECT config FROM config_snapshots WHERE id = ?", (snapshot_id,)
         ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Snapshot introuvable")
+        raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
     return PlainTextResponse(row["config"])
 
 
@@ -444,7 +481,7 @@ async def download_snapshot_txt(snapshot_id: int):
             (snapshot_id,),
         ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Snapshot introuvable")
+        raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
     filename = f"{row['hostname']}_{row['ip_address']}_{row['vendor']}_{snapshot_id}.txt"
     return PlainTextResponse(
         row["config"],
@@ -462,7 +499,7 @@ async def download_snapshot_json(snapshot_id: int):
             (snapshot_id,),
         ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Snapshot introuvable")
+        raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
     payload = {
         "snapshot_id":  row["id"],
         "device_id":    row["device_id"],
@@ -509,17 +546,17 @@ async def api_scan(
             if not detected_vendor:
                 return JSONResponse(
                     status_code=422,
-                    content={"success": False, "error": f"Impossible d'identifier le vendor pour {host}"},
+                    content={"success": False, "error": _t(request, "err.vendor_unidentified", host=host)},
                 )
     except Exception as e:
         log.error(f"Erreur de détection : {e}")
-        return JSONResponse(status_code=500, content={"success": False, "error": f"Erreur de détection : {e}"})
+        return JSONResponse(status_code=500, content={"success": False, "error": _t(request, "err.detection_failed", detail=str(e))})
 
     try:
         result = fetch_config(host, username, password, detected_vendor, port=port)
     except Exception as e:
         log.error(f"Erreur de récupération : {e}")
-        return JSONResponse(status_code=500, content={"success": False, "error": f"Erreur de récupération : {e}"})
+        return JSONResponse(status_code=500, content={"success": False, "error": _t(request, "err.fetch_failed", detail=str(e))})
 
     config_text = result["config"]
     hostname = result["hostname"]
@@ -534,7 +571,7 @@ async def api_scan(
         snapshot_id, digest, is_new = save_snapshot(device_id, config_text)
     except Exception as e:
         log.error(f"Erreur BDD : {e}")
-        return JSONResponse(status_code=500, content={"success": False, "error": f"Erreur BDD : {e}"})
+        return JSONResponse(status_code=500, content={"success": False, "error": _t(request, "err.db_failed", detail=str(e))})
 
     log.info(f"Scan réussi : {hostname} ({detected_vendor}) - snapshot #{snapshot_id} ({'nouveau' if is_new else 'inchangé'})")
     current_user = request.session.get("user")
@@ -575,7 +612,7 @@ async def delete_device(request: Request, device_id: int):
             "SELECT hostname, ip_address FROM devices WHERE id = ?", (device_id,)
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
 
     log.warning(f"[{admin.get('username')}] Suppression équipement : {row['hostname']} ({row['ip_address']})")
@@ -597,9 +634,9 @@ async def delete_snapshot(request: Request, device_id: int, snapshot_id: int):
             "SELECT device_id FROM config_snapshots WHERE id = ?", (snapshot_id,)
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Snapshot introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
         if row["device_id"] != device_id:
-            raise HTTPException(status_code=400, detail="Incohérence device/snapshot")
+            raise HTTPException(status_code=400, detail=_t(request, "err.device_snapshot_mismatch"))
         conn.execute("DELETE FROM config_snapshots WHERE id = ?", (snapshot_id,))
 
     log.warning(f"[{admin.get('username')}] Suppression snapshot #{snapshot_id} (device_id={device_id})")
@@ -632,7 +669,7 @@ async def api_rescan(
     if not device:
         return JSONResponse(
             status_code=404,
-            content={"success": False, "error": "Équipement introuvable"},
+            content={"success": False, "error": _t(request, "err.device_not_found")},
         )
 
     host = device["ip_address"]
@@ -646,7 +683,7 @@ async def api_rescan(
         log.error(f"Erreur rescan : {e}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Erreur de récupération : {e}"},
+            content={"success": False, "error": _t(request, "err.fetch_failed", detail=str(e))},
         )
 
     config_text = result["config"]
@@ -659,7 +696,7 @@ async def api_rescan(
         log.error(f"Erreur BDD : {e}")
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": f"Erreur BDD : {e}"},
+            content={"success": False, "error": _t(request, "err.db_failed", detail=str(e))},
         )
 
     log.info(f"Rescan OK : {new_hostname} snapshot #{snapshot_id} ({'nouveau' if is_new else 'inchangé'})")
@@ -697,7 +734,7 @@ async def api_delete_device(device_id: int, request: Request):
             (device_id,),
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
 
     log.info(
@@ -755,7 +792,7 @@ async def api_create_user(
                    ip_address=_client_ip(request))
         return JSONResponse({"success": True, "user_id": uid})
     except ValueError as e:
-        return JSONResponse(status_code=422, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=422, content={"success": False, "error": _translate_value_error(request, e)})
 
 
 @app.post("/api/users/{user_id}/update")
@@ -786,7 +823,7 @@ async def api_update_user(
                 }
         return JSONResponse({"success": True})
     except ValueError as e:
-        return JSONResponse(status_code=422, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=422, content={"success": False, "error": _translate_value_error(request, e)})
 
 
 @app.post("/api/users/{user_id}/password")
@@ -811,7 +848,7 @@ async def api_change_user_password(
                 request.session["user"] = {**admin, "session_version": new_sv}
         return JSONResponse({"success": True})
     except ValueError as e:
-        return JSONResponse(status_code=422, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=422, content={"success": False, "error": _translate_value_error(request, e)})
 
 
 @app.delete("/api/users/{user_id}")
@@ -820,12 +857,12 @@ async def api_delete_user(request: Request, user_id: int):
     if current["id"] == user_id:
         return JSONResponse(
             status_code=422,
-            content={"success": False, "error": "Vous ne pouvez pas supprimer votre propre compte."},
+            content={"success": False, "error": _t(request, "err.cant_delete_self")},
         )
     try:
         target = users_get(user_id)
         if not target:
-            raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.user_not_found"))
         if users_delete(user_id):
             log.info(f"Utilisateur #{user_id} ({target['username']}) supprimé")
             log_action("user_delete",
@@ -834,9 +871,9 @@ async def api_delete_user(request: Request, user_id: int):
                        details={"deleted_username": target["username"]},
                        ip_address=_client_ip(request))
             return JSONResponse({"success": True})
-        return JSONResponse(status_code=500, content={"success": False, "error": "Suppression échouée"})
+        return JSONResponse(status_code=500, content={"success": False, "error": _t(request, "err.delete_failed")})
     except ValueError as e:
-        return JSONResponse(status_code=422, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=422, content={"success": False, "error": _translate_value_error(request, e)})
 
 
 # =============================================================================
@@ -912,7 +949,7 @@ async def api_audit_purge_preview(request: Request, days: int = 90):
     """Retourne le nombre d'entrées qui seraient supprimées pour N jours de rétention."""
     _require_admin(request)
     if days < 1:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Minimum 1 jour de rétention."})
+        return JSONResponse(status_code=422, content={"success": False, "error": _t(request, "err.retention_min")})
     cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
     with get_connection() as conn:
         row = conn.execute(
@@ -926,12 +963,12 @@ async def api_audit_purge(request: Request, days: int = Form(...)):
     """Purge les entrées d'audit plus vieilles que N jours (admin only)."""
     admin = _require_admin(request)
     if days < 1:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Minimum 1 jour de rétention."})
+        return JSONResponse(status_code=422, content={"success": False, "error": _t(request, "err.retention_min")})
     try:
         deleted = audit_purge_old(days=days)
     except Exception as e:
         log.error(f"Échec purge audit : {e}")
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=500, content={"success": False, "error": _translate_value_error(request, e)})
 
     log.info(f"Purge audit : {deleted} entrée(s) supprimée(s) (rétention {days}j) par {admin.get('username')}")
     log_action(
@@ -966,7 +1003,7 @@ async def api_update_device_metadata(
             (device_id,),
         ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Équipement introuvable")
+        raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
 
     try:
         updated = update_device_metadata(
@@ -977,7 +1014,7 @@ async def api_update_device_metadata(
         )
     except Exception as e:
         log.error(f"Échec mise à jour métadonnées device #{device_id} : {e}")
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=500, content={"success": False, "error": _translate_value_error(request, e)})
 
     log.info(
         f"Métadonnées mises à jour : device #{device_id} ({row['hostname']}) "
@@ -1030,12 +1067,12 @@ async def api_set_schedule(
     """Active/désactive la planification et définit l'intervalle (en minutes)."""
     admin = _require_admin(request)
     if interval_minutes < 1:
-        return JSONResponse(status_code=422, content={"success": False, "error": "Intervalle minimum 1 minute."})
+        return JSONResponse(status_code=422, content={"success": False, "error": _t(request, "err.interval_min")})
 
     with get_connection() as conn:
         row = conn.execute("SELECT id, hostname FROM devices WHERE id = ?", (device_id,)).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         next_run = (datetime.now() + timedelta(minutes=interval_minutes)).isoformat(timespec="seconds") if enabled else None
         conn.execute(
             "UPDATE devices SET schedule_enabled=?, schedule_interval_minutes=?, "
@@ -1065,13 +1102,13 @@ async def api_set_credentials(
     with get_connection() as conn:
         row = conn.execute("SELECT id FROM devices WHERE id = ?", (device_id,)).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
 
     try:
         store_credentials(device_id, username, password)
     except Exception as e:
         log.error(f"Erreur stockage credentials device #{device_id} : {e}")
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=500, content={"success": False, "error": _translate_value_error(request, e)})
 
     log.info(f"Credentials mis à jour pour device #{device_id}")
     log_action("credentials_update",
@@ -1108,10 +1145,10 @@ async def api_run_now(request: Request, device_id: int):
             "SELECT id, hostname, schedule_enabled FROM devices WHERE id = ?", (device_id,)
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Équipement introuvable")
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         if not has_credentials(device_id):
             return JSONResponse(status_code=422,
-                content={"success": False, "error": "Aucun credential stocké pour cet équipement."})
+                content={"success": False, "error": _t(request, "err.no_credentials")})
         now = datetime.now().isoformat(timespec="seconds")
         conn.execute(
             "UPDATE devices SET schedule_next_run=?, schedule_fail_count=0, schedule_enabled=1 WHERE id=?",
@@ -1123,4 +1160,4 @@ async def api_run_now(request: Request, device_id: int):
                username=admin.get("username"),
                source="web", target=f"device:{device_id}",
                ip_address=_client_ip(request))
-    return JSONResponse({"success": True, "message": "Le scan sera lancé dans les 60 prochaines secondes."})
+    return JSONResponse({"success": True, "message": _t(request, "err.scan_will_run")})

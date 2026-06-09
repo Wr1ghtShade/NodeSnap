@@ -36,13 +36,25 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ### 🌍 Internationalisation
 
-- Ajout du multilingue (Français / English) avec switcher dans la barre de navigation
-- Nouveau module `api/i18n.py` (loader JSON + helper Jinja `t()`)
-- Fichiers de traduction `i18n/fr.json` et `i18n/en.json` (232 clés chacun)
+- Ajout du multilingue (Français / English) avec menu déroulant dans la barre de navigation (drapeaux 🇫🇷 / 🇬🇧)
+- Nouveau module `api/i18n.py` (loader JSON + helper Jinja `t()` avec interpolation `{placeholders}`)
+- Fichiers de traduction `i18n/fr.json` et `i18n/en.json` (~270 clés chacun)
 - Nouvel endpoint public `POST /api/lang` pour basculer (cookie `nodesnap_lang`, 1 an)
 - Sélecteur de langue aussi disponible sur la page de connexion
 - Tous les templates traduits : login, dashboard, scan, device, audit, users, snapshot view
 - Attribut `<html lang="…">` synchronisé avec la langue active
+- README anglais (`README.en.md`) avec switch FR ↔ EN en tête des README
+
+### 🔧 Couverture i18n côté serveur
+
+- Tous les `HTTPException(detail=…)` traduits selon la langue du client (`err.*` keys)
+- Toutes les réponses `JSONResponse({error: …})` traduites (CSRF, auth, 422, 500)
+- Messages d'erreur du middleware CSRF et auth traduits
+- Codes d'audit (`AUDIT_ACTIONS`) résolus côté template via `t('audit.action.<code>')`
+- URL params du login : `?error=…` (texte FR) remplacé par `?error_code=…` (clé i18n)
+- `ValueError` levés par la couche storage utilisent maintenant des codes `err.code|param=value` traduits côté route
+- Cookie `nodesnap_lang` marqué `Secure` quand `HTTPS_ONLY=1`
+- Globales JS `window.__I18N` → `window.__NS_I18N` (préfixe projet)
 
 ## [1.0.2] — 2026-06-06
 

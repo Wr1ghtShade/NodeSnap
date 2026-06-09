@@ -159,7 +159,7 @@
 </table>
 
 <script>
-    window.__I18N = {
+    window.__NS_I18N = {
         password_mismatch: {{ t('users.password_mismatch')|tojson }},
         password_updated: {{ t('users.password_updated')|tojson }},
         update_failed: {{ t('users.update_failed')|tojson }},
@@ -275,7 +275,7 @@
         });
     });
 
-    const I = window.__I18N;
+    const I = window.__NS_I18N;
 
     // ---- Création ----
     document.getElementById('btn-new-user').addEventListener('click', () => openModal('modal-create'));

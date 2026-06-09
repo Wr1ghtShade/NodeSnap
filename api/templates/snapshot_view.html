@@ -288,7 +288,7 @@
 <div class="copy-toast" id="copy-toast">{{ t('snap.copied') }}</div>
 
 <script>
-    window.__SNAP_I18N = {
+    window.__NS_I18N_SNAP = {
         copy_failed: {{ t('snap.copy_failed')|tojson }},
     };
 </script>
@@ -418,7 +418,7 @@
             toast.classList.add('show');
             setTimeout(function() { toast.classList.remove('show'); }, 2000);
         }).catch(function(e) {
-            alert((window.__SNAP_I18N && window.__SNAP_I18N.copy_failed || 'Copy failed') + ' : ' + e.message);
+            alert((window.__NS_I18N_SNAP && window.__NS_I18N_SNAP.copy_failed || 'Copy failed') + ' : ' + e.message);
         });
     });
 

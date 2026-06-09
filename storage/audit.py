@@ -28,34 +28,19 @@ CREATE INDEX IF NOT EXISTS idx_audit_username  ON audit_log(username);
 CREATE INDEX IF NOT EXISTS idx_audit_action    ON audit_log(action);
 """
 
-# Catalogue des types d'actions, pour cohérence
-ACTIONS = {
-    # Authentification
-    "login_success":       "Connexion réussie",
-    "login_failed":        "Échec de connexion",
-    "logout":              "Déconnexion",
-    # Équipements
-    "device_scan":         "Scan d'équipement",
-    "device_delete":       "Suppression d'équipement",
-    "device_update":       "Modification d'équipement",
-    # Snapshots
-    "snapshot_create":     "Création de snapshot",
-    "snapshot_delete":     "Suppression de snapshot",
-    "snapshot_download":   "Téléchargement de snapshot",
-    # Utilisateurs
-    "user_create":         "Création d'utilisateur",
-    "user_update":         "Modification d'utilisateur",
-    "user_delete":         "Suppression d'utilisateur",
-    "user_password":       "Changement de mot de passe",
-    # Planification
-    "schedule_update":       "Modification de planification",
-    "schedule_run_now":      "Run manuel immédiat",
-    "schedule_auto_disabled":"Planification auto-désactivée",
-    "credentials_update":    "Mise à jour des credentials",
-    "credentials_delete":    "Suppression des credentials",
-    # Audit
-    "audit_purge":         "Purge du journal d'audit",
-}
+# Catalogue des codes d'actions d'audit. Les libellés affichés sont résolus
+# côté template via t('audit.action.<code>') — voir i18n/fr.json et i18n/en.json.
+ACTION_CODES = (
+    "login_success", "login_failed", "logout",
+    "device_scan", "device_delete", "device_update",
+    "snapshot_create", "snapshot_delete", "snapshot_download",
+    "user_create", "user_update", "user_delete", "user_password",
+    "schedule_update", "schedule_run_now", "schedule_auto_disabled",
+    "credentials_update", "credentials_delete",
+    "audit_purge",
+)
+# Compat : certains imports historiques utilisaient ACTIONS comme dict
+ACTIONS = {code: code for code in ACTION_CODES}
 
 
 def init_audit_table():

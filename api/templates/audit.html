@@ -28,7 +28,7 @@
 </div>
 
 <script>
-    window.__I18N = {
+    window.__NS_I18N = {
         purge_invalid: {{ t('audit.purge_invalid')|tojson }},
         purge_none: {{ t('audit.purge_none')|tojson }},
         purge_will_delete_tpl: {{ t('audit.purge_will_delete', count='__N__')|tojson }},
@@ -120,7 +120,7 @@
     }
     function hidePurgeError() { purgeError.classList.remove('show'); }
 
-    const I = window.__I18N;
+    const I = window.__NS_I18N;
     async function refreshPreview() {
         hidePurgeError();
         const days = parseInt(purgeDays.value, 10);
@@ -351,8 +351,8 @@
             <label for="f-action">{{ t('audit.filter_action') }}</label>
             <select name="action" id="f-action">
                 <option value="">{{ t('audit.filter_all') }}</option>
-                {% for code, label in all_actions.items() %}
-                <option value="{{ code }}" {% if filter_action == code %}selected{% endif %}>{{ label }}</option>
+                {% for code in all_actions.keys() %}
+                <option value="{{ code }}" {% if filter_action == code %}selected{% endif %}>{{ t('audit.action.' + code) }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -400,7 +400,7 @@
             </td>
             <td>
                 <span class="action-tag {% if not r.success %}fail{% endif %}">
-                    {{ all_actions.get(r.action, r.action) }}{% if not r.success %} ✗{% endif %}
+                    {{ t('audit.action.' + r.action) }}{% if not r.success %} ✗{% endif %}
                 </span>
             </td>
             <td><code>{{ r.target or '—' }}</code></td>

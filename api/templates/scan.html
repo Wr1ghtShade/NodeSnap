@@ -225,7 +225,7 @@
 </div>
 
 <script>
-    window.__I18N = {
+    window.__NS_I18N = {
         progress: {{ t('scan.progress')|tojson }},
         result_new: {{ t('scan.result_new')|tojson }},
         result_unchanged: {{ t('scan.result_unchanged')|tojson }},
@@ -260,7 +260,7 @@
     function hideAlert() { alertBox.className = 'alert'; }
     function hideResult() { resultBox.className = 'result-card'; }
 
-    const I = window.__I18N;
+    const I = window.__NS_I18N;
     const LBL_SUBMIT = submitBtn.dataset.label;
     const LBL_LOADING = submitBtn.dataset.loading;
 

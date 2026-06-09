@@ -128,7 +128,7 @@
     </div>
 
     <script>
-        window.__I18N = {
+        window.__NS_I18N = {
             username_required: {{ t('dev.sched_username_required')|tojson }},
             error: {{ t('common.error')|tojson }},
             network_error: {{ t('common.network_error')|tojson }},
@@ -292,7 +292,7 @@
             return { ok: res.ok, data: await res.json() };
         }
 
-        const I = window.__I18N;
+        const I = window.__NS_I18N;
         const SAVE_LBL = saveBtn.dataset.label;
         const SAVE_SAVING = saveBtn.dataset.saving;
         const RUN_LBL = runBtn.dataset.label;
