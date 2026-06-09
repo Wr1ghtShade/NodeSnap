@@ -1,31 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Audit — NodeSnap{% endblock %}
+{% block title %}{{ t('audit.title') }} — NodeSnap{% endblock %}
 {% block content %}
 
 <!-- ============ Modale de purge ============ -->
 <div class="modal-overlay" id="modal-purge">
     <div class="modal">
-        <h3 class="danger">🧹 Purger le journal d'audit</h3>
+        <h3 class="danger">{{ t('audit.purge_title') }}</h3>
         <p style="color: var(--text-dim); margin-bottom: 1rem;">
-            Supprime définitivement toutes les entrées plus vieilles que la durée de rétention choisie.
+            {{ t('audit.purge_intro') }}
         </p>
         <div class="modal-error" id="purge-error"></div>
         <div class="form-group">
-            <label for="purge-days">Conserver les entrées des derniers (jours)</label>
+            <label for="purge-days">{{ t('audit.purge_days_label') }}</label>
             <input type="number" id="purge-days" min="1" max="3650" value="90">
         </div>
         <div id="purge-preview" style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem 1rem; margin: 1rem 0; font-size: 0.9rem; color: var(--text-dim);">
-            Calcul en cours...
+            {{ t('audit.purge_compute') }}
         </div>
         <p style="color: var(--red); font-size: 0.85rem; margin-top: 0.5rem;">
-            ⚠ Cette action est irréversible.
+            {{ t('audit.purge_warning') }}
         </p>
         <div class="modal-actions">
-            <button type="button" class="btn secondary" id="purge-cancel">Annuler</button>
-            <button type="button" class="btn danger" id="purge-confirm">Purger</button>
+            <button type="button" class="btn secondary" id="purge-cancel">{{ t('common.cancel') }}</button>
+            <button type="button" class="btn danger" id="purge-confirm" data-label="{{ t('audit.purge')|replace('🧹 ','') }}" data-progress="{{ t('audit.purge_progress') }}">{{ t('audit.purge')|replace('🧹 ','') }}</button>
         </div>
     </div>
 </div>
+
+<script>
+    window.__I18N = {
+        purge_invalid: {{ t('audit.purge_invalid')|tojson }},
+        purge_none: {{ t('audit.purge_none')|tojson }},
+        purge_will_delete_tpl: {{ t('audit.purge_will_delete', count='__N__')|tojson }},
+        purge_confirm_tpl: {{ t('audit.purge_confirm', days='__D__')|tojson }},
+        purge_done_tpl: {{ t('audit.purge_done', count='__N__')|tojson }},
+        purge_failed: {{ t('audit.purge_failed')|tojson }},
+        error: {{ t('common.error')|tojson }},
+        network_error: {{ t('common.network_error')|tojson }},
+    };
+</script>
 
 <style>
     /* Reprise des styles modale (mêmes que users.html) */
@@ -107,28 +120,29 @@
     }
     function hidePurgeError() { purgeError.classList.remove('show'); }
 
+    const I = window.__I18N;
     async function refreshPreview() {
         hidePurgeError();
         const days = parseInt(purgeDays.value, 10);
         if (!days || days < 1) {
-            purgePreview.innerHTML = '<span style="color: var(--red);">Durée invalide (minimum 1 jour).</span>';
+            purgePreview.innerHTML = '<span style="color: var(--red);">' + I.purge_invalid + '</span>';
             return;
         }
-        purgePreview.textContent = 'Calcul en cours...';
+        purgePreview.textContent = '…';
         try {
             const res = await fetch('/api/audit/purge/preview?days=' + days);
             const data = await res.json();
             if (res.ok && data.success) {
                 if (data.would_delete === 0) {
-                    purgePreview.innerHTML = '<strong style="color: var(--green);">Aucune entrée à supprimer</strong> avec cette rétention.';
+                    purgePreview.innerHTML = '<strong style="color: var(--green);">' + I.purge_none + '</strong>';
                 } else {
-                    purgePreview.innerHTML = '<strong style="color: var(--red);">' + data.would_delete + ' entrée(s)</strong> seront supprimées <span style="color: var(--text-dim);">(antérieures au ' + data.cutoff.replace('T', ' ') + ')</span>.';
+                    purgePreview.innerHTML = '<strong style="color: var(--red);">' + I.purge_will_delete_tpl.replace('__N__', data.would_delete) + '</strong> <span style="color: var(--text-dim);">(' + data.cutoff.replace('T', ' ') + ')</span>';
                 }
             } else {
-                purgePreview.innerHTML = '<span style="color: var(--red);">Erreur : ' + (data.error || 'inconnue') + '</span>';
+                purgePreview.innerHTML = '<span style="color: var(--red);">' + I.error + ' : ' + (data.error || '') + '</span>';
             }
         } catch (err) {
-            purgePreview.innerHTML = '<span style="color: var(--red);">Erreur réseau : ' + err.message + '</span>';
+            purgePreview.innerHTML = '<span style="color: var(--red);">' + I.network_error + ' : ' + err.message + '</span>';
         }
     }
 
@@ -144,30 +158,32 @@
     });
     purgeDays.addEventListener('input', refreshPreview);
 
+    const PURGE_LBL = purgeConfirm.dataset.label;
+    const PURGE_PROGRESS = purgeConfirm.dataset.progress;
     purgeConfirm.addEventListener('click', async () => {
         const days = parseInt(purgeDays.value, 10);
-        if (!days || days < 1) { showPurgeError('Durée invalide.'); return; }
-        if (!confirm('Confirmer la suppression définitive des entrées de plus de ' + days + ' jours ?')) return;
+        if (!days || days < 1) { showPurgeError(I.purge_invalid); return; }
+        if (!confirm(I.purge_confirm_tpl.replace('__D__', days))) return;
 
         purgeConfirm.disabled = true;
-        purgeConfirm.textContent = 'Purge en cours...';
+        purgeConfirm.textContent = PURGE_PROGRESS;
         const fd = new FormData();
         fd.append('days', days);
         try {
             const res = await fetch('/api/audit/purge', { method: 'POST', body: fd });
             const data = await res.json();
             if (res.ok && data.success) {
-                alert(data.deleted + ' entrée(s) supprimée(s).');
+                alert(I.purge_done_tpl.replace('__N__', data.deleted));
                 location.reload();
             } else {
-                showPurgeError(data.error || 'Purge échouée');
+                showPurgeError(data.error || I.purge_failed);
                 purgeConfirm.disabled = false;
-                purgeConfirm.textContent = 'Purger';
+                purgeConfirm.textContent = PURGE_LBL;
             }
         } catch (err) {
-            showPurgeError('Erreur réseau : ' + err.message);
+            showPurgeError(I.network_error + ' : ' + err.message);
             purgeConfirm.disabled = false;
-            purgeConfirm.textContent = 'Purger';
+            purgeConfirm.textContent = PURGE_LBL;
         }
     });
 </script>
@@ -311,51 +327,51 @@
 </style>
 
 <div class="audit-toolbar">
-    <h1 style="margin: 0;">Audit</h1>
+    <h1 style="margin: 0;">{{ t('audit.title') }}</h1>
     <div style="display: flex; gap: 1rem; align-items: center;">
         <span style="color: var(--text-dim); font-size: 0.9rem;">
-            {{ total }} entrée(s) au total
+            {{ t('audit.total', count=total) }}
         </span>
-        <button class="btn danger" id="btn-purge">🧹 Purger</button>
+        <button class="btn danger" id="btn-purge">{{ t('audit.purge') }}</button>
     </div>
 </div>
 
 <div class="filters">
     <form method="get" action="/audit">
         <div class="field">
-            <label for="f-user">Utilisateur</label>
+            <label for="f-user">{{ t('audit.filter_user') }}</label>
             <select name="username" id="f-user">
-                <option value="">— Tous —</option>
+                <option value="">{{ t('audit.filter_all_m') }}</option>
                 {% for u in distinct_users %}
                 <option value="{{ u }}" {% if filter_username == u %}selected{% endif %}>{{ u }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="field">
-            <label for="f-action">Action</label>
+            <label for="f-action">{{ t('audit.filter_action') }}</label>
             <select name="action" id="f-action">
-                <option value="">— Toutes —</option>
+                <option value="">{{ t('audit.filter_all') }}</option>
                 {% for code, label in all_actions.items() %}
                 <option value="{{ code }}" {% if filter_action == code %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="field">
-            <label for="f-source">Source</label>
+            <label for="f-source">{{ t('audit.filter_source') }}</label>
             <select name="source" id="f-source">
-                <option value="">— Toutes —</option>
+                <option value="">{{ t('audit.filter_all') }}</option>
                 <option value="web" {% if filter_source == 'web' %}selected{% endif %}>web</option>
                 <option value="cli" {% if filter_source == 'cli' %}selected{% endif %}>cli</option>
             </select>
         </div>
         <div class="field">
             <label>&nbsp;</label>
-            <button type="submit" class="btn">Filtrer</button>
+            <button type="submit" class="btn">{{ t('audit.btn_filter') }}</button>
         </div>
         {% if filter_username or filter_action or filter_source %}
         <div class="field">
             <label>&nbsp;</label>
-            <a href="/audit" class="btn secondary">Réinitialiser</a>
+            <a href="/audit" class="btn secondary">{{ t('audit.btn_reset') }}</a>
         </div>
         {% endif %}
     </form>
@@ -365,13 +381,13 @@
 <table class="audit-table">
     <thead>
         <tr>
-            <th style="width: 160px; text-align: center;">Date</th>
-            <th style="width: 120px;">Utilisateur</th>
-            <th style="width: 80px;  text-align: center;">Source</th>
-            <th style="width: 180px;">Action</th>
-            <th>Cible</th>
-            <th>Détails</th>
-            <th style="width: 110px;">IP</th>
+            <th style="width: 160px; text-align: center;">{{ t('audit.col_date') }}</th>
+            <th style="width: 120px;">{{ t('audit.col_user') }}</th>
+            <th style="width: 80px;  text-align: center;">{{ t('audit.col_source') }}</th>
+            <th style="width: 180px;">{{ t('audit.col_action') }}</th>
+            <th>{{ t('audit.col_target') }}</th>
+            <th>{{ t('audit.col_details') }}</th>
+            <th style="width: 110px;">{{ t('audit.col_ip') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -409,7 +425,7 @@
         <span class="disabled">‹</span>
     {% endif %}
 
-    <span class="info">Page {{ page }} / {{ total_pages }}</span>
+    <span class="info">{{ t('audit.page', current=page, total=total_pages) }}</span>
 
     {% if page < total_pages %}
         <a href="?page={{ page + 1 }}{{ qs }}">›</a>
@@ -422,7 +438,7 @@
 {% else %}
 <div class="empty">
     <div class="icon">📋</div>
-    <p>Aucune entrée d'audit pour ces critères.</p>
+    <p>{{ t('audit.empty') }}</p>
 </div>
 {% endif %}
 {% endblock %}

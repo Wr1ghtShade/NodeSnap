@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - NodeSnap</title>
+    <title>{{ t('login.title') }} — NodeSnap</title>
     <style>
         :root {
             --bg:       #0d1117;
@@ -107,7 +107,7 @@
 <body>
     <div class="login-card">
         <div class="logo">NodeSnap</div>
-        <div class="tagline">Network Configuration Backup System</div>
+        <div class="tagline">{{ t('login.tagline') }}</div>
 
         {% if error %}
         <div class="error">⚠ {{ error }}</div>
@@ -116,17 +116,57 @@
         <form method="post" action="/login">
             <input type="hidden" name="next" value="{{ next }}">
             <div class="form-group">
-                <label for="username">Nom d'utilisateur</label>
+                <label for="username">{{ t('login.username') }}</label>
                 <input type="text" id="username" name="username" required autofocus autocomplete="username">
             </div>
             <div class="form-group">
-                <label for="password">Mot de passe</label>
+                <label for="password">{{ t('login.password') }}</label>
                 <input type="password" id="password" name="password" required autocomplete="current-password">
             </div>
-            <button type="submit" class="btn">Se connecter</button>
+            <button type="submit" class="btn">{{ t('login.submit') }}</button>
         </form>
 
-        <div class="footer">NodeSnap v0.1.0</div>
+        <div class="lang-switch">
+            <a href="#" data-lang="fr" class="{% if lang == 'fr' %}active{% endif %}">FR</a>
+            <span class="sep">·</span>
+            <a href="#" data-lang="en" class="{% if lang == 'en' %}active{% endif %}">EN</a>
+        </div>
+
+        <div class="footer">NodeSnap v{{ app_version }}</div>
     </div>
+    <style>
+        .lang-switch {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+        }
+        .lang-switch a {
+            color: var(--text-dim);
+            text-decoration: none;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .lang-switch a:hover { color: var(--text); }
+        .lang-switch a.active { color: var(--purple); }
+        .lang-switch .sep { opacity: 0.4; margin: 0 0.2rem; }
+    </style>
+    <script>
+        document.querySelectorAll('.lang-switch a[data-lang]').forEach(function(a) {
+            a.addEventListener('click', async function(e) {
+                e.preventDefault();
+                var lang = a.dataset.lang;
+                try {
+                    var fd = new FormData();
+                    fd.append('lang', lang);
+                    await fetch('/api/lang', { method: 'POST', body: fd });
+                } catch (err) {
+                    document.cookie = 'nodesnap_lang=' + lang + '; path=/; max-age=' + (60*60*24*365) + '; samesite=lax';
+                }
+                location.reload();
+            });
+        });
+    </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ device.common_name or device.hostname }} - NodeSnap{% endblock %}
 {% block content %}
-    <a href="/" class="btn secondary" style="margin-bottom: 1rem;">← Retour</a>
+    <a href="/" class="btn secondary" style="margin-bottom: 1rem;">← {{ t('common.back') }}</a>
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h1 style="margin-bottom: 0.25rem;">
@@ -13,32 +13,32 @@
             </h1>
             {% if device.common_name %}
             <p style="color: var(--text-dim); margin: 0; font-size: 0.9rem;">
-                Hostname : <code>{{ device.hostname }}</code>
+                {{ t('common.hostname') }} : <code>{{ device.hostname }}</code>
             </p>
             {% endif %}
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <button class="btn secondary" id="btn-edit">✎ Modifier</button>
+            <button class="btn secondary" id="btn-edit">✎ {{ t('common.edit') }}</button>
             <form method="post" action="/devices/{{ device.id }}/delete" style="display: inline;"
-                  onsubmit="return confirm('Supprimer définitivement {{ device.common_name or device.hostname }} et TOUS ses snapshots ?\n\nCette action est irréversible.');">
-                <button type="submit" class="btn danger">🗑 Supprimer équipement</button>
+                  onsubmit="return confirm({{ t('dev.confirm_delete', name=(device.common_name or device.hostname))|tojson }});">
+                <button type="submit" class="btn danger">🗑 {{ t('dev.delete') }}</button>
             </form>
         </div>
     </div>
 
     <div class="stats">
         <div class="stat-card">
-            <div class="label">IP</div>
+            <div class="label">{{ t('common.ip') }}</div>
             <div class="value" style="font-size: 1.3rem;">{{ device.ip_address }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">Vendor</div>
+            <div class="label">{{ t('common.vendor') }}</div>
             <div class="value" style="font-size: 1.3rem;">
                 <span class="badge {{ device.vendor }}">{{ device.vendor }}</span>
             </div>
         </div>
         <div class="stat-card">
-            <div class="label">Localisation</div>
+            <div class="label">{{ t('common.location') }}</div>
             <div class="value" style="font-size: 1rem;">
                 {% if device.location %}
                     📍 {{ device.location }}
@@ -48,18 +48,18 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="label">First seen</div>
+            <div class="label">{{ t('dev.first_seen') }}</div>
             <div class="value" style="font-size: 0.95rem;">{{ device.first_seen }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">Last seen</div>
+            <div class="label">{{ t('dev.last_seen') }}</div>
             <div class="value" style="font-size: 0.95rem;">{{ device.last_seen }}</div>
         </div>
     </div>
 
     {% if device.comment %}
     <div class="comment-card">
-        <div class="comment-label">💬 Commentaire</div>
+        <div class="comment-label">{{ t('dev.comment_label') }}</div>
         <div class="comment-body">{{ device.comment }}</div>
     </div>
     {% endif %}
@@ -68,36 +68,36 @@
     <!-- ============ Carte Planification ============ -->
     <div class="schedule-card">
         <div class="schedule-header">
-            <div class="schedule-title">⏱ Planification automatique</div>
+            <div class="schedule-title">{{ t('dev.sched_title') }}</div>
             <span id="sched-status" class="sched-status {% if device.schedule_enabled %}active{% else %}inactive{% endif %}">
-                {% if device.schedule_enabled %}● Active{% else %}○ Inactive{% endif %}
+                {% if device.schedule_enabled %}{{ t('dev.sched_active') }}{% else %}{{ t('dev.sched_inactive') }}{% endif %}
             </span>
         </div>
 
         <div class="schedule-grid">
             <div class="schedule-field">
-                <label>Username SSH</label>
+                <label>{{ t('dev.sched_username') }}</label>
                 <input type="text" id="sched-username" value="{{ ssh_username }}" placeholder="admin" autocomplete="off">
             </div>
             <div class="schedule-field">
-                <label>Mot de passe SSH {% if has_credentials %}<span class="hint-stored">(stocké chiffré)</span>{% endif %}</label>
-                <input type="password" id="sched-password" placeholder="{% if has_credentials %}laisser vide pour conserver{% else %}requis{% endif %}" autocomplete="new-password">
+                <label>{{ t('dev.sched_password') }} {% if has_credentials %}<span class="hint-stored">{{ t('dev.sched_password_stored') }}</span>{% endif %}</label>
+                <input type="password" id="sched-password" placeholder="{% if has_credentials %}{{ t('dev.sched_password_ph_keep') }}{% else %}{{ t('dev.sched_password_ph_req') }}{% endif %}" autocomplete="new-password">
             </div>
             <div class="schedule-field">
-                <label>Intervalle</label>
+                <label>{{ t('dev.sched_interval') }}</label>
                 <select id="sched-interval">
-                    <option value="15">Toutes les 15 minutes</option>
-                    <option value="30">Toutes les 30 minutes</option>
-                    <option value="60" selected>Toutes les heures</option>
-                    <option value="180">Toutes les 3 heures</option>
-                    <option value="360">Toutes les 6 heures</option>
-                    <option value="720">Toutes les 12 heures</option>
-                    <option value="1440">Tous les jours</option>
-                    <option value="10080">Toutes les semaines</option>
+                    <option value="15">{{ t('dev.interval_15') }}</option>
+                    <option value="30">{{ t('dev.interval_30') }}</option>
+                    <option value="60" selected>{{ t('dev.interval_60') }}</option>
+                    <option value="180">{{ t('dev.interval_180') }}</option>
+                    <option value="360">{{ t('dev.interval_360') }}</option>
+                    <option value="720">{{ t('dev.interval_720') }}</option>
+                    <option value="1440">{{ t('dev.interval_1440') }}</option>
+                    <option value="10080">{{ t('dev.interval_10080') }}</option>
                 </select>
             </div>
             <div class="schedule-field">
-                <label>Activer</label>
+                <label>{{ t('dev.sched_enable') }}</label>
                 <label class="switch">
                     <input type="checkbox" id="sched-enabled" {% if device.schedule_enabled %}checked{% endif %}>
                     <span class="slider"></span>
@@ -106,26 +106,35 @@
         </div>
 
         <div class="schedule-meta">
-            <div><span class="k">Dernier run</span><span class="v">{{ device.schedule_last_run or '—' }}</span></div>
-            <div><span class="k">Prochain run</span><span class="v">{{ device.schedule_next_run or '—' }}</span></div>
-            <div><span class="k">Dernier statut</span>
+            <div><span class="k">{{ t('dev.sched_last_run') }}</span><span class="v">{{ device.schedule_last_run or '—' }}</span></div>
+            <div><span class="k">{{ t('dev.sched_next_run') }}</span><span class="v">{{ device.schedule_next_run or '—' }}</span></div>
+            <div><span class="k">{{ t('dev.sched_last_status') }}</span>
                 <span class="v">
                 {% if device.schedule_last_status == 'success' %}<span style="color: var(--green);">✓ success</span>
                 {% elif device.schedule_last_status == 'failed' %}<span style="color: var(--red);">✗ failed</span>
                 {% else %}—{% endif %}
                 </span>
             </div>
-            <div><span class="k">Échecs consécutifs</span><span class="v">{{ device.schedule_fail_count or 0 }} / 3</span></div>
+            <div><span class="k">{{ t('dev.sched_fail_count') }}</span><span class="v">{{ device.schedule_fail_count or 0 }} / 3</span></div>
         </div>
 
         <div class="schedule-actions">
-            <button class="btn" id="sched-save">💾 Enregistrer</button>
-            <button class="btn secondary" id="sched-runnow" {% if not has_credentials %}disabled title="Enregistre d'abord des credentials"{% endif %}>▶ Lancer maintenant</button>
+            <button class="btn" id="sched-save" data-label="{{ t('dev.sched_save') }}" data-saving="{{ t('dev.sched_saving') }}">{{ t('dev.sched_save') }}</button>
+            <button class="btn secondary" id="sched-runnow" data-label="{{ t('dev.sched_run_now') }}" data-loading="{{ t('dev.sched_pending') }}" {% if not has_credentials %}disabled title="{{ t('dev.sched_run_now_blocked') }}"{% endif %}>{{ t('dev.sched_run_now') }}</button>
             {% if has_credentials %}
-            <button class="btn danger" id="sched-purge">🗑 Effacer credentials</button>
+            <button class="btn danger" id="sched-purge" data-confirm="{{ t('dev.sched_purge_confirm') }}">{{ t('dev.sched_purge_creds') }}</button>
             {% endif %}
         </div>
     </div>
+
+    <script>
+        window.__I18N = {
+            username_required: {{ t('dev.sched_username_required')|tojson }},
+            error: {{ t('common.error')|tojson }},
+            network_error: {{ t('common.network_error')|tojson }},
+            snap_confirm_delete_tpl: {{ t('dev.snap_confirm_delete', id='__ID__')|tojson }},
+        };
+    </script>
 
     <style>
         .schedule-card {
@@ -283,66 +292,70 @@
             return { ok: res.ok, data: await res.json() };
         }
 
+        const I = window.__I18N;
+        const SAVE_LBL = saveBtn.dataset.label;
+        const SAVE_SAVING = saveBtn.dataset.saving;
+        const RUN_LBL = runBtn.dataset.label;
+        const RUN_PENDING = runBtn.dataset.loading;
+
         saveBtn.addEventListener('click', async () => {
             const username = document.getElementById('sched-username').value.trim();
             const password = document.getElementById('sched-password').value;
             const interval = parseInt(document.getElementById('sched-interval').value, 10);
             const enabled  = document.getElementById('sched-enabled').checked ? 1 : 0;
 
-            if (!username) { nsToast.warning('Username SSH requis.'); return; }
+            if (!username) { nsToast.warning(I.username_required); return; }
 
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Enregistrement...';
+            saveBtn.textContent = SAVE_SAVING;
 
             try {
-                // 1. Stocker les credentials uniquement si un mot de passe est saisi
                 if (password) {
                     const r = await postForm('/api/devices/' + deviceId + '/credentials',
                                              { username, password });
                     if (!r.ok || !r.data.success) throw new Error(r.data.error || 'credentials');
                 }
-                // 2. Activer la planification
                 const r2 = await postForm('/api/devices/' + deviceId + '/schedule',
                                           { enabled, interval_minutes: interval });
                 if (!r2.ok || !r2.data.success) throw new Error(r2.data.error || 'schedule');
                 location.reload();
             } catch (err) {
-                nsToast.error('Erreur : ' + err.message);
+                nsToast.error(I.error + ' : ' + err.message);
                 saveBtn.disabled = false;
-                saveBtn.textContent = '💾 Enregistrer';
+                saveBtn.textContent = SAVE_LBL;
             }
         });
 
         runBtn.addEventListener('click', async () => {
-            
             runBtn.disabled = true;
-            runBtn.textContent = 'Demande en cours...';
+            runBtn.textContent = RUN_PENDING;
             try {
                 const r = await postForm('/api/devices/' + deviceId + '/run-now', {});
                 if (r.ok && r.data.success) {
-                    nsToast.success(r.data.message || 'Run programmé.');
+                    nsToast.success(r.data.message || '');
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    nsToast.error('Erreur : ' + (r.data.error || 'inconnue'));
+                    nsToast.error(I.error + ' : ' + (r.data.error || ''));
                     runBtn.disabled = false;
-                    runBtn.textContent = '▶ Lancer maintenant';
+                    runBtn.textContent = RUN_LBL;
                 }
             } catch (err) {
-                nsToast.error('Erreur réseau : ' + err.message);
+                nsToast.error(I.network_error + ' : ' + err.message);
                 runBtn.disabled = false;
-                runBtn.textContent = '▶ Lancer maintenant';
+                runBtn.textContent = RUN_LBL;
             }
         });
 
         if (purgeBtn) {
+            const purgeConfirm = purgeBtn.dataset.confirm;
             purgeBtn.addEventListener('click', async () => {
-                if (!confirm('Effacer les credentials stockés ?\n\nLa planification sera désactivée automatiquement.')) return;
+                if (!confirm(purgeConfirm)) return;
                 try {
                     const r = await postForm('/api/devices/' + deviceId + '/credentials', {}, 'DELETE');
                     if (r.ok && r.data.success) location.reload();
-                    else nsToast.error('Erreur : ' + (r.data.error || 'inconnue'));
+                    else nsToast.error(I.error + ' : ' + (r.data.error || ''));
                 } catch (err) {
-                    nsToast.error('Erreur réseau : ' + err.message);
+                    nsToast.error(I.network_error + ' : ' + err.message);
                 }
             });
         }
@@ -359,16 +372,16 @@
     })();
     </script>
 
-    <h2>Historique des snapshots</h2>
+    <h2>{{ t('dev.snapshots_title') }}</h2>
     {% if snapshots %}
     <table class="snapshots-table">
         <thead>
             <tr>
-                <th style="width: 60px;  text-align: center;">ID</th>
-                <th style="width: 180px; text-align: center;">Date</th>
-                <th style="width: 90px;  text-align: center;">Taille</th>
-                <th style="text-align: center;">SHA256</th>
-                <th style="text-align: center;">Actions</th>
+                <th style="width: 60px;  text-align: center;">{{ t('dev.snap_col_id') }}</th>
+                <th style="width: 180px; text-align: center;">{{ t('dev.snap_col_date') }}</th>
+                <th style="width: 90px;  text-align: center;">{{ t('dev.snap_col_size') }}</th>
+                <th style="text-align: center;">{{ t('dev.snap_col_sha') }}</th>
+                <th style="text-align: center;">{{ t('common.actions') }}</th>
             </tr>
         </thead>
         <tbody>
@@ -380,11 +393,11 @@
                 <td><code title="{{ s.sha256 }}">{{ s.sha256 }}</code></td>
                 <td>
                     <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
-                        <a href="/devices/{{ device.id }}/snapshots/{{ s.id }}" class="btn secondary">Voir</a>
+                        <a href="/devices/{{ device.id }}/snapshots/{{ s.id }}" class="btn secondary">{{ t('common.view') }}</a>
                         <a href="/api/snapshots/{{ s.id }}/download.txt" class="btn secondary">.txt</a>
                         <a href="/api/snapshots/{{ s.id }}/download.json" class="btn secondary">.json</a>
                         <form method="post" action="/devices/{{ device.id }}/snapshots/{{ s.id }}/delete" style="display: inline;"
-                              onsubmit="return confirm('Supprimer le snapshot #{{ s.id }} ?');">
+                              onsubmit="return confirm({{ t('dev.snap_confirm_delete', id=s.id)|tojson }});">
                             <button type="submit" class="btn danger icon-only">🗑</button>
                         </form>
                     </div>
@@ -404,9 +417,9 @@
     {% else %}
     <div class="empty">
         <div class="icon">📭</div>
-        <p>Aucun snapshot pour cet équipement.</p>
+        <p>{{ t('dev.no_snapshots') }}</p>
         <p style="margin-top: 1rem;">
-            <a href="/devices/{{ device.id }}/rescan" class="btn">↻ Lancer un premier scan</a>
+            <a href="/devices/{{ device.id }}/rescan" class="btn">{{ t('dev.first_scan') }}</a>
         </p>
     </div>
     {% endif %}
@@ -518,32 +531,32 @@
 
 <div class="modal-overlay" id="modal-edit">
     <div class="modal">
-        <h3>✎ Modifier l'équipement</h3>
+        <h3>{{ t('dev.edit_modal_title') }}</h3>
         <div class="modal-error" id="edit-error"></div>
         <form id="form-edit">
             <div class="form-group">
-                <label for="e-common-name">Nom personnalisé</label>
+                <label for="e-common-name">{{ t('scan.field_common_name') }}</label>
                 <input type="text" id="e-common-name" name="common_name"
                        value="{{ device.common_name or '' }}"
-                       placeholder="Ex: Firewall Prod Paris" autocomplete="off">
-                <span class="field-hint">Affiché en priorité dans le dashboard. Laisse vide pour utiliser le hostname.</span>
+                       placeholder="{{ t('scan.field_common_name_ph') }}" autocomplete="off">
+                <span class="field-hint">{{ t('dev.edit_common_name_hint') }}</span>
             </div>
             <div class="form-group">
-                <label for="e-location">Localisation</label>
+                <label for="e-location">{{ t('common.location') }}</label>
                 <input type="text" id="e-location" name="location"
                        value="{{ device.location or '' }}"
-                       placeholder="Ex: DC Paris - Salle A / Baie 12" autocomplete="off">
-                <span class="field-hint">Lieu physique de l'équipement.</span>
+                       placeholder="{{ t('scan.field_location_ph') }}" autocomplete="off">
+                <span class="field-hint">{{ t('dev.edit_location_hint') }}</span>
             </div>
             <div class="form-group">
-                <label for="e-comment">Commentaire</label>
+                <label for="e-comment">{{ t('common.comment') }}</label>
                 <textarea id="e-comment" name="comment"
-                          placeholder="Ex: Switch cœur de réseau, redondé avec SW02. Maintenance le 1er mardi du mois.">{{ device.comment or '' }}</textarea>
-                <span class="field-hint">Notes libres visibles sur la fiche de l'équipement.</span>
+                          placeholder="{{ t('dev.edit_comment_ph') }}">{{ device.comment or '' }}</textarea>
+                <span class="field-hint">{{ t('dev.edit_comment_hint') }}</span>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn secondary" id="edit-cancel">Annuler</button>
-                <button type="submit" class="btn">Enregistrer</button>
+                <button type="button" class="btn secondary" id="edit-cancel">{{ t('common.cancel') }}</button>
+                <button type="submit" class="btn">{{ t('common.save') }}</button>
             </div>
         </form>
     </div>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -223,6 +223,82 @@
             border-color: var(--red);
             background: rgba(207, 34, 46, 0.08);
         }
+        /* ---- Switcher de langue (menu dropdown) ---- */
+        .lang-menu {
+            position: relative;
+        }
+        .lang-current {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            height: 34px;
+            padding: 0 0.7rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .lang-current:hover {
+            color: var(--text);
+            border-color: var(--text-dim);
+            background: var(--bg-hover);
+        }
+        .lang-current .flag { font-size: 0.95rem; }
+        .lang-current .caret {
+            width: 10px;
+            height: 10px;
+            opacity: 0.5;
+            transition: transform 0.15s;
+        }
+        .lang-menu.open .lang-current .caret { transform: rotate(180deg); }
+        .lang-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+            min-width: 160px;
+            padding: 0.3rem;
+            z-index: 200;
+        }
+        .lang-menu.open .lang-dropdown { display: block; }
+        .lang-dropdown button {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.88rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.12s;
+        }
+        .lang-dropdown button:hover { background: var(--bg-hover); }
+        .lang-dropdown button.active {
+            color: var(--purple);
+            background: rgba(188, 140, 255, 0.08);
+        }
+        .lang-dropdown button .flag { font-size: 1.05rem; }
+        .lang-dropdown button .check {
+            margin-left: auto;
+            color: var(--purple);
+            font-weight: 700;
+            opacity: 0;
+        }
+        .lang-dropdown button.active .check { opacity: 1; }
         /* ---- Toggle thème (réutilise .icon-btn) ---- */
         :root[data-theme="dark"]  .theme-toggle .icon-sun  { display: inline; }
         :root[data-theme="dark"]  .theme-toggle .icon-moon { display: none; }
@@ -502,14 +578,14 @@
                     <rect x="14" y="12" width="7" height="9"/>
                     <rect x="3" y="16" width="7" height="5"/>
                 </svg>
-                <span class="label">Dashboard</span>
+                <span class="label">{{ t('nav.dashboard') }}</span>
             </a>
             <a href="/scan" class="nav-link" data-path="/scan">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19"/>
                     <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-                <span class="label">Add</span>
+                <span class="label">{{ t('nav.add') }}</span>
             </a>
             {% if user and user.role == "admin" %}
             <a href="/users" class="nav-link" data-path="/users">
@@ -519,7 +595,7 @@
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
-                <span class="label">Users</span>
+                <span class="label">{{ t('nav.users') }}</span>
             </a>
             <a href="/audit" class="nav-link" data-path="/audit">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -528,14 +604,14 @@
                     <line x1="9" y1="13" x2="15" y2="13"/>
                     <line x1="9" y1="17" x2="15" y2="17"/>
                 </svg>
-                <span class="label">Audit</span>
+                <span class="label">{{ t('nav.audit') }}</span>
             </a>
             {% endif %}
             <a href="/api/health" target="_blank" class="nav-link ext">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
-                <span class="label">Health</span>
+                <span class="label">{{ t('nav.health') }}</span>
                 <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                     <polyline points="15 3 21 3 21 9"/>
@@ -547,7 +623,7 @@
                     <polyline points="16 18 22 12 16 6"/>
                     <polyline points="8 6 2 12 8 18"/>
                 </svg>
-                <span class="label">API Docs</span>
+                <span class="label">{{ t('nav.api_docs') }}</span>
                 <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                     <polyline points="15 3 21 3 21 9"/>
@@ -565,7 +641,24 @@
                 </div>
             </div>
             {% endif %}
-            <button class="icon-btn theme-toggle" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème">
+            <div class="lang-menu" id="lang-menu">
+                <button type="button" class="lang-current" id="lang-current" aria-haspopup="true" aria-expanded="false" title="{{ t('nav.lang_toggle') }}">
+                    <span class="flag">{% if lang == 'fr' %}🇫🇷{% else %}🇬🇧{% endif %}</span>
+                    <span class="code">{{ lang|upper }}</span>
+                    <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <div class="lang-dropdown" role="menu">
+                    <button type="button" data-lang="fr" class="{% if lang == 'fr' %}active{% endif %}" role="menuitem">
+                        <span class="flag">🇫🇷</span> Français <span class="check">✓</span>
+                    </button>
+                    <button type="button" data-lang="en" class="{% if lang == 'en' %}active{% endif %}" role="menuitem">
+                        <span class="flag">🇬🇧</span> English <span class="check">✓</span>
+                    </button>
+                </div>
+            </div>
+            <button class="icon-btn theme-toggle" id="theme-toggle" title="{{ t('nav.theme_toggle') }}" aria-label="{{ t('nav.theme_toggle') }}">
                 <span class="icon-sun">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="4"/>
@@ -579,7 +672,7 @@
                 </span>
             </button>
             {% if user %}
-            <a href="/logout" class="icon-btn logout" title="Déconnexion" aria-label="Déconnexion">
+            <a href="/logout" class="icon-btn logout" title="{{ t('nav.logout') }}" aria-label="{{ t('nav.logout') }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                     <polyline points="16 17 21 12 16 7"/>
@@ -596,7 +689,7 @@
         <span>NodeSnap</span>
         <span class="version-badge">v{{ app_version }}</span>
         <span class="footer-sep">·</span>
-        <span>Network Configuration Backup</span>
+        <span>{{ t('footer.tagline') }}</span>
         <span class="footer-sep">·</span>
         <a href="https://github.com/Wr1ghtShade/NodeSnap" target="_blank" rel="noopener">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -606,6 +699,48 @@
         </a>
     </footer>
     <script>
+        // ---- Menu de langue ----
+        (function() {
+            var menu = document.getElementById('lang-menu');
+            var trigger = document.getElementById('lang-current');
+            if (!menu || !trigger) return;
+
+            // Ouverture / fermeture
+            trigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var isOpen = menu.classList.toggle('open');
+                trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            });
+
+            // Fermeture au clic en dehors
+            document.addEventListener('click', function(e) {
+                if (!menu.contains(e.target)) {
+                    menu.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            // Sélection d'une langue
+            menu.querySelectorAll('[data-lang]').forEach(function(btn) {
+                btn.addEventListener('click', async function() {
+                    var lang = btn.dataset.lang;
+                    var current = (document.documentElement.getAttribute('lang') || 'fr').toLowerCase();
+                    if (lang === current) {
+                        menu.classList.remove('open');
+                        return;
+                    }
+                    try {
+                        var fd = new FormData();
+                        fd.append('lang', lang);
+                        await fetch('/api/lang', { method: 'POST', body: fd });
+                    } catch (err) {
+                        document.cookie = 'nodesnap_lang=' + lang + '; path=/; max-age=' + (60*60*24*365) + '; samesite=lax';
+                    }
+                    location.reload();
+                });
+            });
+        })();
+
         // Switcher de thème : inverse et mémorise dans un cookie (1 an)
         document.getElementById('theme-toggle').addEventListener('click', function() {
             var current = document.documentElement.getAttribute('data-theme') || 'dark';

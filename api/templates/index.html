@@ -1,31 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - NodeSnap{% endblock %}
+{% block title %}{{ t('dash.title') }} — NodeSnap{% endblock %}
 {% block content %}
-    <h1>Dashboard</h1>
+    <h1>{{ t('dash.title') }}</h1>
 
     <div class="stats stats-compact">
         <div class="stat-card">
-            <div class="label">📡 Équipements</div>
+            <div class="label">📡 {{ t('dash.stat_devices') }}</div>
             <div class="value">{{ stats.devices }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">📸 Snapshots</div>
+            <div class="label">📸 {{ t('dash.stat_snapshots') }}</div>
             <div class="value">{{ stats.snapshots }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">🏷 Vendors</div>
+            <div class="label">🏷 {{ t('dash.stat_vendors') }}</div>
             <div class="value">{{ stats.vendors }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">🕒 Dernier backup</div>
+            <div class="label">🕒 {{ t('dash.stat_last_backup') }}</div>
             <div class="value time">{{ stats.last_backup or '—' }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">⚡ Backups 24h</div>
+            <div class="label">⚡ {{ t('dash.stat_backups_24h') }}</div>
             <div class="value">{{ stats.backups_24h }}</div>
         </div>
         <div class="stat-card">
-            <div class="label">💾 Taille BDD</div>
+            <div class="label">💾 {{ t('dash.stat_db_size') }}</div>
             <div class="value size">
                 {%- if stats.total_bytes < 1024 -%}
                     {{ stats.total_bytes }} o
@@ -65,21 +65,21 @@
     }
 </style>
 
-    <h2>Équipements enregistrés</h2>
+    <h2>{{ t('dash.devices_title') }}</h2>
 
     {% if devices %}
     <table>
         <thead>
             <tr>
-                <th>Nom personnalisé</th>
-                <th>Hostname</th>
-                <th>Adresse IP</th>
-                <th>Vendor</th>
-                <th>Localisation</th>
-                <th style="text-align: center;">Planning</th>
-                <th style="text-align: center;">Snapshots</th>
-                <th>Dernier backup</th>
-                <th style="width: 80px; text-align: center;">Actions</th>
+                <th>{{ t('dash.col_common_name') }}</th>
+                <th>{{ t('dash.col_hostname') }}</th>
+                <th>{{ t('dash.col_ip') }}</th>
+                <th>{{ t('dash.col_vendor') }}</th>
+                <th>{{ t('dash.col_location') }}</th>
+                <th style="text-align: center;">{{ t('dash.col_planning') }}</th>
+                <th style="text-align: center;">{{ t('dash.col_snapshots') }}</th>
+                <th>{{ t('dash.col_last_backup') }}</th>
+                <th style="width: 80px; text-align: center;">{{ t('dash.col_actions') }}</th>
             </tr>
         </thead>
         <tbody>
@@ -105,12 +105,12 @@
                 <td style="text-align: center;">
                     {% if d.schedule_enabled %}
                         {% if d.schedule_last_status == 'failed' %}
-                            <span class="sched-icon failed" title="Dernier scan: échec">⚠</span>
+                            <span class="sched-icon failed" title="{{ t('dash.sched_failed') }}">⚠</span>
                         {% else %}
-                            <span class="sched-icon active" title="Planifié toutes les {{ d.schedule_interval_minutes }} min">⏱</span>
+                            <span class="sched-icon active" title="{{ t('dash.sched_active', minutes=d.schedule_interval_minutes) }}">⏱</span>
                         {% endif %}
                     {% else %}
-                        <span class="sched-icon off" title="Non planifié">—</span>
+                        <span class="sched-icon off" title="{{ t('dash.sched_off') }}">—</span>
                     {% endif %}
                 </td>
                 <td style="text-align: center;">{{ d.snapshot_count }}</td>
@@ -119,7 +119,7 @@
                     <button class="btn-delete"
                             data-id="{{ d.id }}"
                             data-name="{{ d.common_name or d.hostname }}"
-                            title="Supprimer cet équipement">
+                            title="{{ t('dash.delete_tooltip') }}">
                         🗑
                     </button>
                 </td>
@@ -130,9 +130,9 @@
     {% else %}
     <div class="empty">
         <div class="icon">📡</div>
-        <p>Aucun équipement enregistré pour le moment.</p>
+        <p>{{ t('dash.empty_title') }}</p>
         <p style="margin-top: 0.5rem; font-size: 0.9rem;">
-            Lance un backup avec <code>./nodesnap.py &lt;ip&gt; &lt;user&gt;</code> ou via <a href="/scan" style="color: var(--accent);">l'interface Add</a>.
+            {{ t('dash.empty_hint') }} <code>./nodesnap.py &lt;ip&gt; &lt;user&gt;</code>.
         </p>
     </div>
     {% endif %}
@@ -211,16 +211,16 @@
 
 <div class="modal-overlay" id="confirm-modal">
     <div class="modal">
-        <h3>⚠ Confirmer la suppression</h3>
-        <p>Tu es sur le point de supprimer définitivement l'équipement :</p>
+        <h3>⚠ {{ t('dash.modal_delete_title') }}</h3>
+        <p>{{ t('dash.modal_delete_body') }}</p>
         <p><strong id="modal-device-name"></strong></p>
         <p style="margin-top: 1rem; font-size: 0.85rem;">
-            Tous ses snapshots de configuration seront également supprimés.
-            <strong style="color: var(--red);">Cette action est irréversible.</strong>
+            {{ t('dash.modal_delete_warn') }}
+            <strong style="color: var(--red);">{{ t('common.irreversible') }}</strong>
         </p>
         <div class="modal-actions">
-            <button class="btn secondary" id="modal-cancel">Annuler</button>
-            <button class="btn-danger" id="modal-confirm">Supprimer</button>
+            <button class="btn secondary" id="modal-cancel">{{ t('common.cancel') }}</button>
+            <button class="btn-danger" id="modal-confirm" data-label="{{ t('common.delete') }}">{{ t('common.delete') }}</button>
         </div>
     </div>
 </div>
@@ -252,10 +252,11 @@
         }
     });
 
+    const DEL_LABEL = modalConfirm.dataset.label || 'Delete';
     modalConfirm.addEventListener('click', async () => {
         if (!pendingDeviceId) return;
         modalConfirm.disabled = true;
-        modalConfirm.textContent = 'Suppression...';
+        modalConfirm.textContent = '…';
         try {
             const response = await fetch('/api/devices/' + pendingDeviceId, { method: 'DELETE' });
             const data = await response.json();
@@ -269,14 +270,14 @@
                     location.reload();
                 }
             } else {
-                nsToast.error('Erreur : ' + (data.error || data.detail || 'suppression échouée'));
+                nsToast.error((data.error || data.detail || 'failed'));
                 modalConfirm.disabled = false;
-                modalConfirm.textContent = 'Supprimer';
+                modalConfirm.textContent = DEL_LABEL;
             }
         } catch (err) {
-            nsToast.error('Erreur réseau : ' + err.message);
+            nsToast.error(err.message);
             modalConfirm.disabled = false;
-            modalConfirm.textContent = 'Supprimer';
+            modalConfirm.textContent = DEL_LABEL;
         }
     });
 </script>

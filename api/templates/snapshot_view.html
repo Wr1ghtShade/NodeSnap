@@ -228,7 +228,7 @@
 
 <div class="snap-header">
     <div class="snap-breadcrumb">
-        <a href="/">Dashboard</a>
+        <a href="/">{{ t('snap.crumb_dashboard') }}</a>
         <span class="sep">/</span>
         <a href="/devices/{{ device.id }}">{{ device.common_name or device.hostname }}</a>
         <span class="sep">/</span>
@@ -236,15 +236,15 @@
     </div>
     <div class="snap-title">
         <h1>
-            📄 Configuration
+            {{ t('snap.title') }}
             <span class="snap-id">#{{ snapshot.id }}</span>
         </h1>
         <span class="badge {{ device.vendor }}">{{ device.vendor }}</span>
     </div>
     <div class="snap-meta">
-        <div><span class="k">Date</span><span class="v">{{ snapshot.created_at }}</span></div>
-        <div><span class="k">Taille</span><span class="v">{{ snapshot.size_bytes }} o</span></div>
-        <div><span class="k">Lignes</span><span class="v" id="line-count">…</span></div>
+        <div><span class="k">{{ t('snap.date') }}</span><span class="v">{{ snapshot.created_at }}</span></div>
+        <div><span class="k">{{ t('snap.size') }}</span><span class="v">{{ snapshot.size_bytes }} o</span></div>
+        <div><span class="k">{{ t('snap.lines') }}</span><span class="v" id="line-count">…</span></div>
         <div><span class="k">SHA256</span><span class="v"><code title="{{ snapshot.sha256 }}">{{ snapshot.sha256[:24] }}…</code></span></div>
     </div>
 </div>
@@ -252,27 +252,27 @@
 <div class="snap-actions">
     <div class="search-box">
         <span style="color: var(--text-dim); font-size: 0.8rem;">🔍</span>
-        <input type="text" id="search-input" placeholder="Rechercher dans la config...">
+        <input type="text" id="search-input" placeholder="{{ t('snap.search_ph') }}">
         <span class="count" id="search-count"></span>
     </div>
-    <button class="icon-btn-sm" id="btn-prev-hit" title="Résultat précédent (Shift+Enter)">↑</button>
-    <button class="icon-btn-sm" id="btn-next-hit" title="Résultat suivant (Enter)">↓</button>
-    <button class="icon-btn-sm" id="btn-wrap" title="Retour à la ligne">⇌</button>
-    <button class="icon-btn-sm" id="btn-copy" title="Copier toute la config">📋</button>
-    <a href="/api/snapshots/{{ snapshot.id }}/download.txt" class="icon-btn-sm" title="Télécharger .txt">⬇</a>
-    <a href="/api/snapshots/{{ snapshot.id }}/download.json" class="icon-btn-sm" title="Télécharger .json">{ }</a>
+    <button class="icon-btn-sm" id="btn-prev-hit" title="{{ t('snap.prev_hit') }}">↑</button>
+    <button class="icon-btn-sm" id="btn-next-hit" title="{{ t('snap.next_hit') }}">↓</button>
+    <button class="icon-btn-sm" id="btn-wrap" title="{{ t('snap.wrap') }}">⇌</button>
+    <button class="icon-btn-sm" id="btn-copy" title="{{ t('snap.copy') }}">📋</button>
+    <a href="/api/snapshots/{{ snapshot.id }}/download.txt" class="icon-btn-sm" title="{{ t('snap.dl_txt') }}">⬇</a>
+    <a href="/api/snapshots/{{ snapshot.id }}/download.json" class="icon-btn-sm" title="{{ t('snap.dl_json') }}">{ }</a>
 
     <div class="spacer"></div>
 
     <div class="snap-nav">
         {% if next_id %}
-        <a href="/devices/{{ device.id }}/snapshots/{{ next_id }}" class="icon-btn-sm" title="Snapshot plus récent">←</a>
+        <a href="/devices/{{ device.id }}/snapshots/{{ next_id }}" class="icon-btn-sm" title="{{ t('snap.newer') }}">←</a>
         {% else %}
         <span class="icon-btn-sm disabled">←</span>
         {% endif %}
         <span class="pos">{{ position }} / {{ total }}</span>
         {% if prev_id %}
-        <a href="/devices/{{ device.id }}/snapshots/{{ prev_id }}" class="icon-btn-sm" title="Snapshot plus ancien">→</a>
+        <a href="/devices/{{ device.id }}/snapshots/{{ prev_id }}" class="icon-btn-sm" title="{{ t('snap.older') }}">→</a>
         {% else %}
         <span class="icon-btn-sm disabled">→</span>
         {% endif %}
@@ -285,7 +285,13 @@
     </table>
 </div>
 
-<div class="copy-toast" id="copy-toast">✓ Configuration copiée dans le presse-papier</div>
+<div class="copy-toast" id="copy-toast">{{ t('snap.copied') }}</div>
+
+<script>
+    window.__SNAP_I18N = {
+        copy_failed: {{ t('snap.copy_failed')|tojson }},
+    };
+</script>
 
 <script id="raw-config" type="application/json">{{ snapshot.config | tojson }}</script>
 <script>
@@ -412,7 +418,7 @@
             toast.classList.add('show');
             setTimeout(function() { toast.classList.remove('show'); }, 2000);
         }).catch(function(e) {
-            alert('Impossible de copier : ' + e.message);
+            alert((window.__SNAP_I18N && window.__SNAP_I18N.copy_failed || 'Copy failed') + ' : ' + e.message);
         });
     });
 

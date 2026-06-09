@@ -8,7 +8,8 @@ from fastapi import Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from starlette.status import HTTP_302_FOUND
 
-from api.main import app, templates
+from api.main import app, render, templates
+from api.i18n import COOKIE_NAME as LANG_COOKIE, SUPPORTED as LANGS_SUPPORTED, DEFAULT as LANG_DEFAULT
 from collectors.fetcher import fetch_config, SUPPORTED_VENDORS
 from core.detector import detect_vendor, VENDOR_TO_NETMIKO
 from storage.audit import (
@@ -47,7 +48,7 @@ from storage.users import (
 log = logging.getLogger("nodesnap.api.routes")
 
 # Chemins publics qui ne nécessitent PAS d'authentification
-PUBLIC_PATHS = {"/login", "/api/health", "/static", "/favicon.ico"}
+PUBLIC_PATHS = {"/login", "/api/health", "/api/lang", "/static", "/favicon.ico"}
 
 # ---- Rate limit du login ----
 LOGIN_MAX_FAILURES = 5    # tentatives dans la fenêtre
@@ -168,7 +169,7 @@ async def login_page(request: Request, next: str = "/", error: str = ""):
     """Affiche le formulaire de connexion."""
     if request.session.get("user"):
         return RedirectResponse(url=_safe_next(next), status_code=HTTP_302_FOUND)
-    return templates.TemplateResponse(
+    return render(
         request, "login.html",
         {"next": next, "error": error},
     )
@@ -268,7 +269,7 @@ async def index(request: Request):
                     WHERE created_at >= datetime('now','-1 day')) AS backups_24h,
                 (SELECT COALESCE(SUM(size_bytes),0) FROM config_snapshots) AS total_bytes
         """).fetchone()
-    return templates.TemplateResponse(
+    return render(
         request, "index.html",
         {"devices": devices, "stats": stats, "user": request.session.get("user")},
     )
@@ -290,7 +291,7 @@ async def device_detail(request: Request, device_id: int):
             ORDER BY created_at DESC
         """, (device_id,)).fetchall()
     creds = get_credentials(device_id) if has_credentials(device_id) else None
-    return templates.TemplateResponse(
+    return render(
         request, "device.html",
         {
             "device": device,
@@ -306,7 +307,7 @@ async def device_detail(request: Request, device_id: int):
 async def scan_form(request: Request):
     """Affiche le formulaire de scan d'un équipement (admin only)."""
     _require_admin(request)
-    return templates.TemplateResponse(
+    return render(
         request, "scan.html",
         {"vendors": sorted(SUPPORTED_VENDORS), "user": request.session.get("user")},
     )
@@ -345,7 +346,7 @@ async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
             "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ?",
             (device_id,),
         ).fetchone()["c"]
-    return templates.TemplateResponse(
+    return render(
         request, "snapshot_view.html",
         {
             "user": request.session.get("user"),
@@ -367,6 +368,20 @@ async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
 async def api_health():
     """Endpoint de healthcheck basique (public, sans info sensible)."""
     return {"status": "ok", "service": "nodesnap"}
+
+
+@app.post("/api/lang")
+async def api_set_lang(request: Request, lang: str = Form(...)):
+    """Change la langue de l'interface (cookie 1 an, public)."""
+    if lang not in LANGS_SUPPORTED:
+        lang = LANG_DEFAULT
+    response = JSONResponse({"success": True, "lang": lang})
+    response.set_cookie(
+        key=LANG_COOKIE, value=lang,
+        max_age=60 * 60 * 24 * 365,  # 1 an
+        samesite="lax", httponly=False, secure=False, path="/",
+    )
+    return response
 
 
 @app.get("/api/devices")
@@ -711,7 +726,7 @@ async def users_page(request: Request):
     """Page de gestion des utilisateurs (admin only)."""
     _require_admin(request)
     users = list_users()
-    return templates.TemplateResponse(
+    return render(
         request, "users.html",
         {
             "users": [dict(u) for u in users],
@@ -849,7 +864,7 @@ async def audit_page(
         source=source or None,
     )
     total_pages = max(1, (total + per_page - 1) // per_page)
-    return templates.TemplateResponse(
+    return render(
         request, "audit.html",
         {
             "user": request.session.get("user"),

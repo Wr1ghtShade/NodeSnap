@@ -15,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 # Assure que la racine du projet est dans sys.path (nécessaire pour uvicorn)
 _sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from api.i18n import load_translations, t as i18n_t, get_lang, SUPPORTED as LANGS_SUPPORTED, DEFAULT as LANG_DEFAULT
 from storage.database import init_db
 from storage.users import init_users_table
 from version import __version__
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
     init_audit_table()
     from storage.credentials import init_credentials_table
     init_credentials_table()
+    load_translations()
     from services.scheduler import start_scheduler, stop_scheduler
     start_scheduler()
     log.info(f"NodeSnap API démarrée, base : {db_path} (https_only={HTTPS_ONLY})")
@@ -78,6 +80,21 @@ app = FastAPI(
 # ---- Templates & fichiers statiques ----
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["app_version"] = __version__
+templates.env.globals["langs_supported"] = LANGS_SUPPORTED
+
+
+def render(request, template_name: str, ctx: dict | None = None):
+    """Wrapper autour de TemplateResponse qui injecte automatiquement :
+    - lang (langue courante depuis le cookie)
+    - t   (fonction de traduction curryée sur la langue)
+    - user (session courante)
+    """
+    ctx = dict(ctx or {})
+    lang = get_lang(request)
+    ctx.setdefault("user", request.session.get("user") if hasattr(request, "session") else None)
+    ctx["lang"] = lang
+    ctx["t"] = lambda key, **kwargs: i18n_t(key, lang, **kwargs)
+    return templates.TemplateResponse(request, template_name, ctx)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 

@@ -32,6 +32,18 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Endpoint debug session supprimé
 - Permissions systemd renforcées (NoNewPrivileges, PrivateTmp, ProtectSystem…)
 
+## [1.0.3] — 2026-06-09
+
+### 🌍 Internationalisation
+
+- Ajout du multilingue (Français / English) avec switcher dans la barre de navigation
+- Nouveau module `api/i18n.py` (loader JSON + helper Jinja `t()`)
+- Fichiers de traduction `i18n/fr.json` et `i18n/en.json` (232 clés chacun)
+- Nouvel endpoint public `POST /api/lang` pour basculer (cookie `nodesnap_lang`, 1 an)
+- Sélecteur de langue aussi disponible sur la page de connexion
+- Tous les templates traduits : login, dashboard, scan, device, audit, users, snapshot view
+- Attribut `<html lang="…">` synchronisé avec la langue active
+
 ## [1.0.2] — 2026-06-06
 
 ### 🔒 Sécurité

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Gestion des utilisateurs - NodeSnap{% endblock %}
+{% block title %}{{ t('users.title') }} — NodeSnap{% endblock %}
 {% block content %}
 <style>
     .users-toolbar {
@@ -102,23 +102,23 @@
 </style>
 
 <div class="users-toolbar">
-    <h1 style="margin: 0;">Gestion des utilisateurs</h1>
-    <button class="btn" id="btn-new-user">+ Nouvel utilisateur</button>
+    <h1 style="margin: 0;">{{ t('users.title') }}</h1>
+    <button class="btn" id="btn-new-user">{{ t('users.new') }}</button>
 </div>
 
 <p style="color: var(--text-dim); margin-bottom: 1.5rem;">
-    {{ users|length }} utilisateur(s) · {{ admin_count }} administrateur(s)
+    {{ t('users.count', users=users|length, admins=admin_count) }}
 </p>
 
 <table>
     <thead>
         <tr>
-            <th style="width: 60px; text-align: center;">ID</th>
-            <th>Nom d'utilisateur</th>
-            <th style="width: 120px; text-align: center;">Rôle</th>
-            <th style="width: 180px; text-align: center;">Créé le</th>
-            <th style="width: 180px; text-align: center;">Dernière connexion</th>
-            <th style="text-align: center;">Actions</th>
+            <th style="width: 60px; text-align: center;">{{ t('users.col_id') }}</th>
+            <th>{{ t('users.col_username') }}</th>
+            <th style="width: 120px; text-align: center;">{{ t('users.col_role') }}</th>
+            <th style="width: 180px; text-align: center;">{{ t('users.col_created') }}</th>
+            <th style="width: 180px; text-align: center;">{{ t('users.col_last_login') }}</th>
+            <th style="text-align: center;">{{ t('common.actions') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -127,7 +127,7 @@
             <td>#{{ u.id }}</td>
             <td>
                 <strong>{{ u.username }}</strong>
-                {% if u.id == user.id %}<span style="color: var(--text-dim); font-size: 0.8rem;"> (vous)</span>{% endif %}
+                {% if u.id == user.id %}<span style="color: var(--text-dim); font-size: 0.8rem;"> {{ t('users.you') }}</span>{% endif %}
             </td>
             <td style="text-align: center;">
                 <span class="role-badge {{ u.role }}">{{ u.role }}</span>
@@ -138,16 +138,16 @@
                 <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
                     <button class="btn secondary"
                             onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.role }}')">
-                        Modifier
+                        {{ t('users.btn_edit') }}
                     </button>
                     <button class="btn secondary"
                             onclick="openPasswordModal({{ u.id }}, '{{ u.username }}')">
-                        Mot de passe
+                        {{ t('users.btn_password') }}
                     </button>
                     {% if u.id != user.id %}
                     <button class="btn danger"
                             onclick="deleteUser({{ u.id }}, '{{ u.username }}')"
-                            title="Supprimer cet utilisateur">
+                            title="{{ t('users.delete_tooltip') }}">
                         🗑
                     </button>
                     {% endif %}
@@ -158,22 +158,35 @@
     </tbody>
 </table>
 
+<script>
+    window.__I18N = {
+        password_mismatch: {{ t('users.password_mismatch')|tojson }},
+        password_updated: {{ t('users.password_updated')|tojson }},
+        update_failed: {{ t('users.update_failed')|tojson }},
+        create_failed: {{ t('users.create_failed')|tojson }},
+        edit_failed: {{ t('users.edit_failed')|tojson }},
+        confirm_delete_tpl: {{ t('users.confirm_delete', username='__U__')|tojson }},
+        error: {{ t('common.error')|tojson }},
+        network_error: {{ t('common.network_error')|tojson }},
+    };
+</script>
+
 <!-- ============ Modale création ============ -->
 <div class="modal-overlay" id="modal-create">
     <div class="modal">
-        <h3>Nouvel utilisateur</h3>
+        <h3>{{ t('users.modal_create') }}</h3>
         <div class="modal-error" id="create-error"></div>
         <form id="form-create">
             <div class="form-group">
-                <label for="c-username">Nom d'utilisateur</label>
+                <label for="c-username">{{ t('common.username') }}</label>
                 <input type="text" id="c-username" name="username" required autocomplete="off">
             </div>
             <div class="form-group">
-                <label for="c-password">Mot de passe (8 caractères minimum)</label>
+                <label for="c-password">{{ t('users.password_minlen') }}</label>
                 <input type="password" id="c-password" name="password" required minlength="8" autocomplete="new-password">
             </div>
             <div class="form-group">
-                <label for="c-role">Rôle</label>
+                <label for="c-role">{{ t('common.role') }}</label>
                 <select id="c-role" name="role">
                     {% for r in valid_roles %}
                     <option value="{{ r }}">{{ r }}</option>
@@ -181,8 +194,8 @@
                 </select>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn secondary" onclick="closeModal('modal-create')">Annuler</button>
-                <button type="submit" class="btn">Créer</button>
+                <button type="button" class="btn secondary" onclick="closeModal('modal-create')">{{ t('common.cancel') }}</button>
+                <button type="submit" class="btn">{{ t('common.create') }}</button>
             </div>
         </form>
     </div>
@@ -191,16 +204,16 @@
 <!-- ============ Modale édition ============ -->
 <div class="modal-overlay" id="modal-edit">
     <div class="modal">
-        <h3>Modifier l'utilisateur</h3>
+        <h3>{{ t('users.modal_edit') }}</h3>
         <div class="modal-error" id="edit-error"></div>
         <form id="form-edit">
             <input type="hidden" id="e-id">
             <div class="form-group">
-                <label for="e-username">Nom d'utilisateur</label>
+                <label for="e-username">{{ t('common.username') }}</label>
                 <input type="text" id="e-username" name="username" required autocomplete="off">
             </div>
             <div class="form-group">
-                <label for="e-role">Rôle</label>
+                <label for="e-role">{{ t('common.role') }}</label>
                 <select id="e-role" name="role">
                     {% for r in valid_roles %}
                     <option value="{{ r }}">{{ r }}</option>
@@ -208,8 +221,8 @@
                 </select>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn secondary" onclick="closeModal('modal-edit')">Annuler</button>
-                <button type="submit" class="btn">Enregistrer</button>
+                <button type="button" class="btn secondary" onclick="closeModal('modal-edit')">{{ t('common.cancel') }}</button>
+                <button type="submit" class="btn">{{ t('common.save') }}</button>
             </div>
         </form>
     </div>
@@ -218,24 +231,24 @@
 <!-- ============ Modale mot de passe ============ -->
 <div class="modal-overlay" id="modal-password">
     <div class="modal">
-        <h3>Changer le mot de passe</h3>
+        <h3>{{ t('users.modal_password') }}</h3>
         <p style="color: var(--text-dim); margin-bottom: 1rem;">
-            Pour <strong id="p-username" style="color: var(--text);"></strong>
+            {{ t('users.modal_password_for') }} <strong id="p-username" style="color: var(--text);"></strong>
         </p>
         <div class="modal-error" id="password-error"></div>
         <form id="form-password">
             <input type="hidden" id="p-id">
             <div class="form-group">
-                <label for="p-new">Nouveau mot de passe (8 caractères minimum)</label>
+                <label for="p-new">{{ t('users.password_new') }}</label>
                 <input type="password" id="p-new" name="password" required minlength="8" autocomplete="new-password">
             </div>
             <div class="form-group">
-                <label for="p-confirm">Confirmer</label>
+                <label for="p-confirm">{{ t('users.password_confirm') }}</label>
                 <input type="password" id="p-confirm" required minlength="8" autocomplete="new-password">
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn secondary" onclick="closeModal('modal-password')">Annuler</button>
-                <button type="submit" class="btn">Mettre à jour</button>
+                <button type="button" class="btn secondary" onclick="closeModal('modal-password')">{{ t('common.cancel') }}</button>
+                <button type="submit" class="btn">{{ t('common.update') }}</button>
             </div>
         </form>
     </div>
@@ -262,6 +275,8 @@
         });
     });
 
+    const I = window.__I18N;
+
     // ---- Création ----
     document.getElementById('btn-new-user').addEventListener('click', () => openModal('modal-create'));
     document.getElementById('form-create').addEventListener('submit', async e => {
@@ -274,7 +289,7 @@
             const res = await fetch('/api/users', { method: 'POST', body: fd });
             const data = await res.json();
             if (res.ok && data.success) location.reload();
-            else showError('create-error', data.error || 'Création échouée');
+            else showError('create-error', data.error || I.create_failed);
         } catch (err) { showError('create-error', err.message); }
     });
 
@@ -295,7 +310,7 @@
             const res = await fetch('/api/users/' + id + '/update', { method: 'POST', body: fd });
             const data = await res.json();
             if (res.ok && data.success) location.reload();
-            else showError('edit-error', data.error || 'Modification échouée');
+            else showError('edit-error', data.error || I.edit_failed);
         } catch (err) { showError('edit-error', err.message); }
     });
 
@@ -312,7 +327,7 @@
         const id = document.getElementById('p-id').value;
         const pwd = document.getElementById('p-new').value;
         const conf = document.getElementById('p-confirm').value;
-        if (pwd !== conf) { showError('password-error', 'Les mots de passe ne correspondent pas.'); return; }
+        if (pwd !== conf) { showError('password-error', I.password_mismatch); return; }
         const fd = new FormData();
         fd.append('password', pwd);
         try {
@@ -320,26 +335,26 @@
             const data = await res.json();
             if (res.ok && data.success) {
                 closeModal('modal-password');
-                alert('Mot de passe mis à jour.');
+                alert(I.password_updated);
             } else {
-                showError('password-error', data.error || 'Échec de la mise à jour');
+                showError('password-error', data.error || I.update_failed);
             }
         } catch (err) { showError('password-error', err.message); }
     });
 
     // ---- Suppression ----
     async function deleteUser(id, username) {
-        if (!confirm("Supprimer définitivement l'utilisateur '" + username + "' ?\n\nCette action est irréversible.")) return;
+        if (!confirm(I.confirm_delete_tpl.replace('__U__', username))) return;
         try {
             const res = await fetch('/api/users/' + id, { method: 'DELETE' });
             const data = await res.json();
             if (res.ok && data.success) {
                 document.getElementById('user-row-' + id).remove();
             } else {
-                alert('Erreur : ' + (data.error || data.detail || 'suppression échouée'));
+                alert(I.error + ' : ' + (data.error || data.detail || ''));
             }
         } catch (err) {
-            alert('Erreur réseau : ' + err.message);
+            alert(I.network_error + ' : ' + err.message);
         }
     }
 </script>

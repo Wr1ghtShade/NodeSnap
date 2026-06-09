@@ -136,6 +136,7 @@ NodeSnap/
 ├── api/                     # Interface web & API REST (FastAPI)
 │   ├── main.py              # Initialisation de l'app, middlewares
 │   ├── routes.py            # Endpoints HTML et JSON
+│   ├── i18n.py              # Module d'internationalisation (FR / EN)
 │   └── templates/           # Templates Jinja2
 │       ├── base.html        # Layout commun (header, footer, thème)
 │       ├── index.html       # Dashboard — liste des équipements
@@ -165,6 +166,10 @@ NodeSnap/
 │   ├── install.sh           # Script d'installation automatisé
 │   └── nodesnap-web.service # Template du service systemd
 │
+├── i18n/                    # Fichiers de traduction
+│   ├── fr.json
+│   └── en.json
+│
 ├── CHANGELOG.md             # Historique des versions
 └── README.md
 ```
@@ -181,6 +186,7 @@ NodeSnap/
 - 📋 Journal d'audit complet
 - 👥 Gestion multi-utilisateurs avec rôles (admin = écriture, user = lecture seule)
 - 🛡️ Protection CSRF, rate limit du login, headers HTTP de sécurité (CSP, X-Frame-Options…)
+- 🌍 Interface multilingue (Français / English) avec switch en un clic
 
 ## ⚙️ Installation
 
@@ -218,6 +224,12 @@ Créer le premier utilisateur admin (le mot de passe est demandé en interactif)
 ```bash
 python -m storage.users create <username> admin
 ```
+
+### 🌍 Langues
+
+L'interface est traduite en **français** et **anglais**. Bascule en un clic via le bouton `FR` / `EN` dans la barre de navigation, ou depuis la page de connexion. La préférence est mémorisée dans un cookie `nodesnap_lang` (durée 1 an).
+
+Pour ajouter ou corriger une traduction, éditer `i18n/fr.json` ou `i18n/en.json` puis redémarrer le service (les fichiers sont chargés au boot).
 
 ### 🔐 Rôles
 

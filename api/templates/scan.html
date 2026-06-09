@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Ajouter équipement - NodeSnap{% endblock %}
+{% block title %}{{ t('scan.title') }} — NodeSnap{% endblock %}
 {% block content %}
 <style>
     .form-card {
@@ -148,39 +148,38 @@
     }
 </style>
 
-<h1>Ajouter équipement</h1>
+<h1>{{ t('scan.title') }}</h1>
 <p style="color: var(--text-dim); margin-bottom: 2rem;">
-    Saisis les identifiants SSH de l'équipement. NodeSnap détectera automatiquement le vendor
-    et sauvegardera la configuration.
+    {{ t('scan.intro') }}
 </p>
 
 <div class="form-card">
     <form id="scan-form">
         <!-- ============ Section 1 : Connexion SSH ============ -->
         <div class="form-section">
-            <div class="form-section-title">🔌 Connexion SSH</div>
+            <div class="form-section-title">{{ t('scan.section_ssh') }}</div>
             <div class="form-row">
                 <div class="form-group">
-                    <label for="host">Adresse IP ou hostname</label>
+                    <label for="host">{{ t('scan.field_host') }}</label>
                     <input type="text" id="host" name="host" required placeholder="192.168.1.1">
                 </div>
                 <div class="form-group" style="flex: 0 0 120px;">
-                    <label for="port">Port SSH</label>
+                    <label for="port">{{ t('scan.field_port') }}</label>
                     <input type="number" id="port" name="port" value="22" min="1" max="65535">
                 </div>
             </div>
             <div class="form-group">
-                <label for="username">Nom d'utilisateur</label>
+                <label for="username">{{ t('common.username') }}</label>
                 <input type="text" id="username" name="username" required placeholder="admin" autocomplete="off">
             </div>
             <div class="form-group">
-                <label for="password">Mot de passe</label>
+                <label for="password">{{ t('common.password') }}</label>
                 <input type="password" id="password" name="password" required autocomplete="off">
             </div>
             <div class="form-group">
-                <label for="vendor">Vendor <span class="optional">(optionnel, sinon détection auto)</span></label>
+                <label for="vendor">{{ t('scan.field_vendor') }} <span class="optional">{{ t('scan.field_vendor_hint') }}</span></label>
                 <select id="vendor" name="vendor">
-                    <option value="">— Détection automatique —</option>
+                    <option value="">{{ t('scan.vendor_auto') }}</option>
                     {% for v in vendors %}
                     <option value="{{ v }}">{{ v }}</option>
                     {% endfor %}
@@ -190,40 +189,60 @@
 
         <!-- ============ Section 2 : Métadonnées ============ -->
         <div class="form-section">
-            <div class="form-section-title">📋 Métadonnées (optionnelles)</div>
+            <div class="form-section-title">{{ t('scan.section_meta') }}</div>
             <div class="form-group">
-                <label for="common_name">Nom personnalisé <span class="optional">(optionnel)</span></label>
+                <label for="common_name">{{ t('scan.field_common_name') }} <span class="optional">{{ t('common.optional') }}</span></label>
                 <input type="text" id="common_name" name="common_name"
-                       placeholder="Ex: Firewall Prod Paris" autocomplete="off">
-                <span class="field-hint">Affiché en priorité dans le dashboard à la place du hostname technique.</span>
+                       placeholder="{{ t('scan.field_common_name_ph') }}" autocomplete="off">
+                <span class="field-hint">{{ t('scan.field_common_name_hint') }}</span>
             </div>
             <div class="form-group">
-                <label for="location">Localisation <span class="optional">(optionnel)</span></label>
+                <label for="location">{{ t('scan.field_location') }} <span class="optional">{{ t('common.optional') }}</span></label>
                 <input type="text" id="location" name="location"
-                       placeholder="Ex: DC Paris - Salle A / Baie 12" autocomplete="off">
-                <span class="field-hint">Lieu physique de l'équipement, pour le retrouver rapidement.</span>
+                       placeholder="{{ t('scan.field_location_ph') }}" autocomplete="off">
+                <span class="field-hint">{{ t('scan.field_location_hint') }}</span>
             </div>
             <div class="form-group">
-                <label for="comment">Commentaire <span class="optional">(optionnel)</span></label>
+                <label for="comment">{{ t('scan.field_comment') }} <span class="optional">{{ t('common.optional') }}</span></label>
                 <textarea id="comment" name="comment"
-                          placeholder="Notes libres : rôle, redondance, contact, plage de maintenance..."></textarea>
-                <span class="field-hint">Visible sur la fiche détaillée de l'équipement.</span>
+                          placeholder="{{ t('scan.field_comment_ph') }}"></textarea>
+                <span class="field-hint">{{ t('scan.field_comment_hint') }}</span>
             </div>
         </div>
 
-        <button type="submit" id="submit-btn" class="btn">Lancer le scan</button>
-        <a href="/" class="btn secondary" style="margin-left: 0.5rem;">Annuler</a>
+        <button type="submit" id="submit-btn" class="btn" data-label="{{ t('scan.submit') }}" data-loading="{{ t('scan.submitting') }}">{{ t('scan.submit') }}</button>
+        <a href="/" class="btn secondary" style="margin-left: 0.5rem;">{{ t('common.cancel') }}</a>
     </form>
 </div>
 
 <div id="alert" class="alert"></div>
 
 <div id="result" class="result-card">
-    <h2 style="margin-top: 0;">Résultat du scan</h2>
+    <h2 style="margin-top: 0;">{{ t('scan.result_title') }}</h2>
     <div class="result-grid" id="result-grid"></div>
     <div class="actions" id="result-actions"></div>
     <div class="config-preview" id="config-preview"></div>
 </div>
+
+<script>
+    window.__I18N = {
+        progress: {{ t('scan.progress')|tojson }},
+        result_new: {{ t('scan.result_new')|tojson }},
+        result_unchanged: {{ t('scan.result_unchanged')|tojson }},
+        result_state: {{ t('scan.result_state')|tojson }},
+        result_view_device: {{ t('scan.result_view_device')|tojson }},
+        result_dl_txt: {{ t('scan.result_dl_txt')|tojson }},
+        result_dl_json: {{ t('scan.result_dl_json')|tojson }},
+        hostname: {{ t('common.hostname')|tojson }},
+        ip: {{ t('common.ip')|tojson }},
+        vendor: {{ t('common.vendor')|tojson }},
+        size: {{ t('common.size')|tojson }},
+        common_name: {{ t('scan.field_common_name')|tojson }},
+        location: {{ t('common.location')|tojson }},
+        error: {{ t('common.error')|tojson }},
+        network_error: {{ t('common.network_error')|tojson }},
+    };
+</script>
 
 <script>
     const form = document.getElementById('scan-form');
@@ -241,13 +260,17 @@
     function hideAlert() { alertBox.className = 'alert'; }
     function hideResult() { resultBox.className = 'result-card'; }
 
+    const I = window.__I18N;
+    const LBL_SUBMIT = submitBtn.dataset.label;
+    const LBL_LOADING = submitBtn.dataset.loading;
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         hideAlert();
         hideResult();
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner"></span>Scan en cours...';
-        showAlert('info', '<span class="spinner"></span>Connexion SSH et récupération de la configuration en cours, cela peut prendre jusqu\'à 30 secondes...');
+        submitBtn.innerHTML = '<span class="spinner"></span>' + LBL_LOADING;
+        showAlert('info', '<span class="spinner"></span>' + I.progress);
 
         const formData = new FormData(form);
 
@@ -256,49 +279,49 @@
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                showAlert('error', '❌ <strong>Erreur :</strong> ' + (data.error || 'scan échoué'));
+                showAlert('error', '❌ <strong>' + I.error + ' :</strong> ' + (data.error || ''));
                 return;
             }
 
             hideAlert();
             const changeInfo = data.is_new
-                ? '<strong style="color: var(--green);">Nouveau snapshot #' + data.snapshot_id + '</strong>'
-                : '<strong style="color: var(--yellow);">Aucun changement détecté</strong>';
+                ? '<strong style="color: var(--green);">' + I.result_new + ' #' + data.snapshot_id + '</strong>'
+                : '<strong style="color: var(--yellow);">' + I.result_unchanged + '</strong>';
 
             let gridHtml = `
-                <div class="item"><div class="k">Hostname</div><div class="v">${data.hostname}</div></div>
-                <div class="item"><div class="k">IP</div><div class="v">${data.ip_address}</div></div>
-                <div class="item"><div class="k">Vendor</div><div class="v"><span class="badge ${data.vendor}">${data.vendor}</span></div></div>
-                <div class="item"><div class="k">Taille</div><div class="v">${data.size_bytes} octets</div></div>
+                <div class="item"><div class="k">${I.hostname}</div><div class="v">${data.hostname}</div></div>
+                <div class="item"><div class="k">${I.ip}</div><div class="v">${data.ip_address}</div></div>
+                <div class="item"><div class="k">${I.vendor}</div><div class="v"><span class="badge ${data.vendor}">${data.vendor}</span></div></div>
+                <div class="item"><div class="k">${I.size}</div><div class="v">${data.size_bytes} o</div></div>
                 <div class="item"><div class="k">SHA256</div><div class="v"><code>${data.sha256.substring(0,16)}…</code></div></div>
-                <div class="item"><div class="k">État</div><div class="v">${changeInfo}</div></div>
+                <div class="item"><div class="k">${I.result_state}</div><div class="v">${changeInfo}</div></div>
             `;
             if (data.common_name) {
-                gridHtml += `<div class="item"><div class="k">Nom personnalisé</div><div class="v"><strong>${data.common_name}</strong></div></div>`;
+                gridHtml += `<div class="item"><div class="k">${I.common_name}</div><div class="v"><strong>${data.common_name}</strong></div></div>`;
             }
             if (data.location) {
-                gridHtml += `<div class="item"><div class="k">Localisation</div><div class="v">📍 ${data.location}</div></div>`;
+                gridHtml += `<div class="item"><div class="k">${I.location}</div><div class="v">📍 ${data.location}</div></div>`;
             }
             resultGrid.innerHTML = gridHtml;
 
             if (data.snapshot_id) {
                 resultActions.innerHTML = `
-                    <a href="/api/snapshots/${data.snapshot_id}/download.txt" class="btn">⬇ Télécharger .txt</a>
-                    <a href="/api/snapshots/${data.snapshot_id}/download.json" class="btn">⬇ Télécharger .json</a>
-                    <a href="/devices/${data.device_id}" class="btn secondary">Voir l'équipement</a>
+                    <a href="/api/snapshots/${data.snapshot_id}/download.txt" class="btn">⬇ ${I.result_dl_txt}</a>
+                    <a href="/api/snapshots/${data.snapshot_id}/download.json" class="btn">⬇ ${I.result_dl_json}</a>
+                    <a href="/devices/${data.device_id}" class="btn secondary">${I.result_view_device}</a>
                 `;
             } else {
-                resultActions.innerHTML = `<a href="/devices/${data.device_id}" class="btn secondary">Voir l'équipement</a>`;
+                resultActions.innerHTML = `<a href="/devices/${data.device_id}" class="btn secondary">${I.result_view_device}</a>`;
             }
 
-            configPreview.textContent = data.config.substring(0, 5000) + (data.config.length > 5000 ? '\n\n[... tronqué, ' + (data.config.length - 5000) + ' octets supplémentaires ...]' : '');
+            configPreview.textContent = data.config.substring(0, 5000) + (data.config.length > 5000 ? '\n\n[... +' + (data.config.length - 5000) + ' bytes ...]' : '');
             resultBox.className = 'result-card show';
             form.password.value = '';
         } catch (err) {
-            showAlert('error', '❌ <strong>Erreur réseau :</strong> ' + err.message);
+            showAlert('error', '❌ <strong>' + I.network_error + ' :</strong> ' + err.message);
         } finally {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = 'Lancer le scan';
+            submitBtn.innerHTML = LBL_SUBMIT;
         }
     });
 </script>
