@@ -204,7 +204,13 @@ pip install -r requirements.txt
 ## 🔧 Configuration
 
 ```bash
-cp .env.example .env   # puis éditez SESSION_SECRET
+cp .env.example .env
+```
+
+Génère une `SESSION_SECRET` aléatoire et colle-la dans `.env` à la place de `changeme` :
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Variables disponibles dans `.env` :

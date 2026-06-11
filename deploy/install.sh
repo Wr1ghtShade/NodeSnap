@@ -40,9 +40,9 @@ else
     warn "Venv déjà présent, on continue."
 fi
 
-info "Installation des dépendances..."
-sudo -u "$INSTALL_USER" "$WORKDIR/.venv/bin/pip" install --quiet --upgrade pip
-sudo -u "$INSTALL_USER" "$WORKDIR/.venv/bin/pip" install --quiet -r "$WORKDIR/requirements.txt"
+info "Installation des dépendances (peut prendre 5–10 min sur ARM/RPi)..."
+sudo -u "$INSTALL_USER" "$WORKDIR/.venv/bin/pip" install --upgrade pip
+sudo -u "$INSTALL_USER" "$WORKDIR/.venv/bin/pip" install -r "$WORKDIR/requirements.txt"
 success "Dépendances installées."
 
 # ── 2. Fichier .env ──────────────────────────────────────────────────────────

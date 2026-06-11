@@ -46,6 +46,9 @@ HTTPS_ONLY = os.environ.get("HTTPS_ONLY", "0") == "1"
 
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
+# Crée le dossier static si absent (cas d'un fresh clone : Git ne track pas
+# les dossiers vides). Évite un RuntimeError au boot d'Uvicorn.
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---- Lifespan : démarrage et arrêt propre (remplace @app.on_event) ----
