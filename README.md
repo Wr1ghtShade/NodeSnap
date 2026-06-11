@@ -305,8 +305,10 @@ sudo systemctl start nodesnap-web     # Démarrer le service web
 sudo systemctl stop nodesnap-web      # Arrêter le service web
 sudo systemctl restart nodesnap-web   # Redémarrer le service web
 
-journalctl -u nodesnap-web -f         # Logs en temps réel
-journalctl -u nodesnap-web -n 50      # 50 dernières lignes de log
+journalctl -u nodesnap-web -f                  # Logs en temps réel
+journalctl -u nodesnap-web -n 100 -f          # 100 dernières lignes + suivi
+journalctl -u nodesnap-web --since today -f   # Logs depuis aujourd'hui
+journalctl -u nodesnap-web -p err -f          # Erreurs uniquement
 
 ./nodesnap.py <ip> <user>             # Backup manuel d'un équipement
 ```

@@ -305,8 +305,10 @@ sudo systemctl start nodesnap-web     # Start the web service
 sudo systemctl stop nodesnap-web      # Stop the web service
 sudo systemctl restart nodesnap-web   # Restart the web service
 
-journalctl -u nodesnap-web -f         # Live logs
-journalctl -u nodesnap-web -n 50      # Last 50 log lines
+journalctl -u nodesnap-web -f                  # Live logs
+journalctl -u nodesnap-web -n 100 -f          # Last 100 lines + follow
+journalctl -u nodesnap-web --since today -f   # Logs since today
+journalctl -u nodesnap-web -p err -f          # Errors only
 
 ./nodesnap.py <ip> <user>             # Manual device backup
 ```
