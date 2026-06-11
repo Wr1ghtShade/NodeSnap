@@ -243,7 +243,15 @@
     </div>
     <div class="snap-meta">
         <div><span class="k">{{ t('snap.date') }}</span><span class="v">{{ snapshot.created_at }}</span></div>
-        <div><span class="k">{{ t('snap.size') }}</span><span class="v">{{ snapshot.size_bytes }} o</span></div>
+        <div><span class="k">{{ t('snap.size') }}</span><span class="v">
+            {%- if snapshot.size_bytes < 1024 -%}
+                {{ snapshot.size_bytes }} o
+            {%- elif snapshot.size_bytes < 1048576 -%}
+                {{ "%.1f"|format(snapshot.size_bytes / 1024) }} Ko
+            {%- else -%}
+                {{ "%.2f"|format(snapshot.size_bytes / 1048576) }} Mo
+            {%- endif -%}
+        </span></div>
         <div><span class="k">{{ t('snap.lines') }}</span><span class="v" id="line-count">…</span></div>
         <div><span class="k">SHA256</span><span class="v"><code title="{{ snapshot.sha256 }}">{{ snapshot.sha256[:24] }}…</code></span></div>
     </div>
