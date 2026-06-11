@@ -1,9 +1,35 @@
 """NodeSnap - Récupération des configurations selon le vendor."""
 import logging
+import paramiko
 from netmiko import ConnectHandler
 from core.detector import VENDOR_TO_NETMIKO
 
 log = logging.getLogger(__name__)
+
+
+# ---- Workaround paramiko pour Cisco Small Business (SG/SF 200/300/350/500/550) ----
+# Ces switches annoncent allowed_types=[''] (liste vide) au lieu de password ou
+# keyboard-interactive. Paramiko lève BadAuthenticationType avant même de tenter
+# l'authentification. On wrappe Transport.auth_password pour rebasculer en
+# keyboard-interactive quand on détecte ce cas pathologique.
+_original_auth_password = paramiko.Transport.auth_password
+
+
+def _patched_auth_password(self, username, password, event=None, fallback=True):
+    try:
+        return _original_auth_password(self, username, password, event, fallback)
+    except paramiko.BadAuthenticationType as e:
+        # allowed_types vide ou [''] -> on tente keyboard-interactive
+        if not e.allowed_types or all(not t for t in e.allowed_types):
+            log.warning(f"SSH allowed_types={e.allowed_types}, fallback keyboard-interactive")
+            def _handler(title, instructions, prompts):
+                return [password for _ in prompts]
+            return self.auth_interactive(username, _handler)
+        raise
+
+
+paramiko.Transport.auth_password = _patched_auth_password
+# -----------------------------------------------------------------------------
 
 # Commande de récupération de la config complète par vendor
 BACKUP_COMMANDS = {
