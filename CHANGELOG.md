@@ -32,17 +32,37 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Endpoint debug session supprimé
 - Permissions systemd renforcées (NoNewPrivileges, PrivateTmp, ProtectSystem…)
 
-## [Unreleased]
+## [1.0.9] — 2026-06-11
 
 ### 🌐 Couverture vendors étendue
 
-- Passage de **7 à 32 vendors supportés** end-to-end (détection + backup + hostname)
+- Passage de **7 à 34 vendors supportés** end-to-end (détection + backup + hostname)
 - **Cisco** : ajout de IOS-XE, IOS-XR, NX-OS, ASA (en plus de IOS et SG/SF Small Business)
-- **Firewalls** : ajout de Checkpoint Gaia, SonicWall, WatchGuard, Stormshield
+- **Firewalls** : ajout de Checkpoint Gaia, SonicWall, WatchGuard, Stormshield, pfSense, OPNsense
 - **Autres** : Juniper Junos, Arista EOS, Dell (OS10/OS6/Force10/PowerConnect), Huawei VRP, Mikrotik RouterOS, Extreme EXOS, Allied Telesis AWPlus, VyOS, Ubiquiti EdgeRouter/EdgeSwitch/UniFi Switch, Nokia SR OS, Ruckus FastIron/ICX, F5 BIG-IP (tmsh), Linux générique
+- **pfSense / OPNsense** : bypass de Netmiko via paramiko direct (le menu console pfSense ne propose pas de prompt shell — Netmiko bloque en `session_preparation`)
 - Workaround paramiko 4.x : réactivation des algos SSH legacy (KEX SHA-1, AES-CBC, HMAC-SHA1, ssh-rsa) pour la compat avec les firmwares anciens (Cisco SBSwitch, vieux Aruba, etc.)
 - Création automatique du dossier `api/static/` au boot (fix RuntimeError sur fresh clone)
 - `deploy/install.sh` : retrait du flag `--quiet` de pip pour voir la progression sur ARM/RPi
+
+### 🎨 Thèmes
+
+- Ajout du thème **Dracula** (violet vampire : `#282a36`, `#8be9fd`, `#bd93f9`)
+- Ajout du thème **Tokyo Night** (bleu nuit froid : `#1a1b26`, `#7aa2f7`, `#bb9af7`)
+- Ajout du thème **Cyberpunk** (néon sur noir : `#0a0014`, cyan `#00f0ff`, magenta `#ff00ff`)
+- Sélecteur de thème en menu déroulant (remplace le bouton bascule Dark/Light)
+- 5 thèmes disponibles : Dark 🌑, Light ☀️, Dracula 🧛, Tokyo Night 🌃, Cyberpunk ⚡
+
+### 🖥️ Interface
+
+- Taille des snapshots affichée en o / Ko / Mo (plus lisible que les octets bruts)
+
+### 🔒 Sécurité
+
+- **Open redirect** : `_safe_next()` rejette désormais les backslashes (`/\evil.com`, `\\evil.com`) que les navigateurs normalisaient en `//evil.com`
+- **XSS stockée** : hostname extrait de l'équipement sanitisé à la source (charset DNS `[a-zA-Z0-9\-_.]`) — un device rogue ne peut plus injecter du HTML/JS via son hostname
+- **Injection Content-Disposition** : `_safe_filename()` appliqué sur les téléchargements `.txt` / `.json` — supprime `"`, retours chariot et autres caractères hors charset safe
+- **NameError** (500 au lieu de 404) : paramètre `request` manquant corrigé sur 4 endpoints API (`/api/devices/{id}`, `/api/snapshots/{id}/raw`, `/download.txt`, `/download.json`)
 
 ## [1.0.3] — 2026-06-09
 

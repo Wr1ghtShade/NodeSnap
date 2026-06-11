@@ -260,6 +260,14 @@
     function hideAlert() { alertBox.className = 'alert'; }
     function hideResult() { resultBox.className = 'result-card'; }
 
+    // Échappement HTML : les valeurs renvoyées par /api/scan (hostname surtout)
+    // proviennent de l'équipement scanné et ne sont pas fiables avant insertion.
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     const I = window.__NS_I18N;
     const LBL_SUBMIT = submitBtn.dataset.label;
     const LBL_LOADING = submitBtn.dataset.loading;
@@ -289,18 +297,18 @@
                 : '<strong style="color: var(--yellow);">' + I.result_unchanged + '</strong>';
 
             let gridHtml = `
-                <div class="item"><div class="k">${I.hostname}</div><div class="v">${data.hostname}</div></div>
-                <div class="item"><div class="k">${I.ip}</div><div class="v">${data.ip_address}</div></div>
-                <div class="item"><div class="k">${I.vendor}</div><div class="v"><span class="badge ${data.vendor}">${data.vendor}</span></div></div>
-                <div class="item"><div class="k">${I.size}</div><div class="v">${data.size_bytes} o</div></div>
-                <div class="item"><div class="k">SHA256</div><div class="v"><code>${data.sha256.substring(0,16)}…</code></div></div>
+                <div class="item"><div class="k">${I.hostname}</div><div class="v">${esc(data.hostname)}</div></div>
+                <div class="item"><div class="k">${I.ip}</div><div class="v">${esc(data.ip_address)}</div></div>
+                <div class="item"><div class="k">${I.vendor}</div><div class="v"><span class="badge ${esc(data.vendor)}">${esc(data.vendor)}</span></div></div>
+                <div class="item"><div class="k">${I.size}</div><div class="v">${esc(data.size_bytes)} o</div></div>
+                <div class="item"><div class="k">SHA256</div><div class="v"><code>${esc(String(data.sha256).substring(0,16))}…</code></div></div>
                 <div class="item"><div class="k">${I.result_state}</div><div class="v">${changeInfo}</div></div>
             `;
             if (data.common_name) {
-                gridHtml += `<div class="item"><div class="k">${I.common_name}</div><div class="v"><strong>${data.common_name}</strong></div></div>`;
+                gridHtml += `<div class="item"><div class="k">${I.common_name}</div><div class="v"><strong>${esc(data.common_name)}</strong></div></div>`;
             }
             if (data.location) {
-                gridHtml += `<div class="item"><div class="k">${I.location}</div><div class="v">📍 ${data.location}</div></div>`;
+                gridHtml += `<div class="item"><div class="k">${I.location}</div><div class="v">📍 ${esc(data.location)}</div></div>`;
             }
             resultGrid.innerHTML = gridHtml;
 

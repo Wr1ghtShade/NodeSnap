@@ -74,11 +74,28 @@ def _client_ip(request: Request) -> str:
 
 
 def _safe_next(next_url: str) -> str:
-    """Valide que l'URL de redirection est locale (prévient l'open redirect)."""
+    """Valide que l'URL de redirection est locale (prévient l'open redirect).
+    On exige un chemin absolu commençant par un seul '/'. Les backslashes sont
+    rejetés car les navigateurs les normalisent en '/' ('/\\evil.com' -> '//evil.com'),
+    ce qui contournerait un simple test scheme/netloc."""
+    if not next_url or not next_url.startswith("/"):
+        return "/"
+    # '//host' ou '/\\host' = redirection protocol-relative vers un domaine externe
+    if next_url.startswith("//") or next_url.startswith("/\\") or "\\" in next_url:
+        return "/"
     parsed = urlparse(next_url)
     if parsed.scheme or parsed.netloc:
         return "/"
-    return next_url or "/"
+    return next_url
+
+
+def _safe_filename(name: str) -> str:
+    """Neutralise un nom de fichier destiné à un en-tête Content-Disposition.
+    hostname/vendor proviennent en partie de l'équipement : on retire tout ce
+    qui pourrait casser l'en-tête (guillemets, retours chariot) ou poser souci
+    au système de fichiers côté client."""
+    cleaned = "".join(c for c in str(name) if c.isalnum() or c in "-_.")
+    return cleaned[:200] or "snapshot"
 
 
 def _t(request: Request, key: str, **kwargs) -> str:
@@ -437,7 +454,7 @@ async def api_list_devices():
 
 
 @app.get("/api/devices/{device_id}")
-async def api_device_detail(device_id: int):
+async def api_device_detail(request: Request, device_id: int):
     with get_connection() as conn:
         device = conn.execute(
             "SELECT * FROM devices WHERE id = ?", (device_id,)
@@ -457,7 +474,7 @@ async def api_device_detail(device_id: int):
 
 
 @app.get("/api/snapshots/{snapshot_id}/raw", response_class=PlainTextResponse)
-async def api_snapshot_raw(snapshot_id: int):
+async def api_snapshot_raw(request: Request, snapshot_id: int):
     with get_connection() as conn:
         row = conn.execute(
             "SELECT config FROM config_snapshots WHERE id = ?", (snapshot_id,)
@@ -472,7 +489,7 @@ async def api_snapshot_raw(snapshot_id: int):
 # =============================================================================
 
 @app.get("/api/snapshots/{snapshot_id}/download.txt", response_class=PlainTextResponse)
-async def download_snapshot_txt(snapshot_id: int):
+async def download_snapshot_txt(request: Request, snapshot_id: int):
     with get_connection() as conn:
         row = conn.execute(
             "SELECT s.config, s.created_at, d.hostname, d.ip_address, d.vendor "
@@ -482,7 +499,7 @@ async def download_snapshot_txt(snapshot_id: int):
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
-    filename = f"{row['hostname']}_{row['ip_address']}_{row['vendor']}_{snapshot_id}.txt"
+    filename = _safe_filename(f"{row['hostname']}_{row['ip_address']}_{row['vendor']}_{snapshot_id}") + ".txt"
     return PlainTextResponse(
         row["config"],
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
@@ -490,7 +507,7 @@ async def download_snapshot_txt(snapshot_id: int):
 
 
 @app.get("/api/snapshots/{snapshot_id}/download.json")
-async def download_snapshot_json(snapshot_id: int):
+async def download_snapshot_json(request: Request, snapshot_id: int):
     with get_connection() as conn:
         row = conn.execute(
             "SELECT s.*, d.hostname, d.ip_address, d.vendor, d.model "
@@ -512,7 +529,7 @@ async def download_snapshot_json(snapshot_id: int):
         "size_bytes":   row["size_bytes"],
         "config":       row["config"],
     }
-    filename = f"{row['hostname']}_{row['ip_address']}_{row['vendor']}_{snapshot_id}.json"
+    filename = _safe_filename(f"{row['hostname']}_{row['ip_address']}_{row['vendor']}_{snapshot_id}") + ".json"
     return JSONResponse(
         payload,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},

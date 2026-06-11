@@ -248,6 +248,18 @@ def _fetch_pfsense_raw(host: str, port: int, username: str, password: str,
     return {"config": config, "hostname": hostname}
 
 
+def _sanitize_hostname(value: str | None) -> str | None:
+    """Nettoie un hostname extrait d'un équipement (potentiellement hostile).
+    Un hostname est une donnée contrôlée par l'équipement scanné : un device
+    rogue pourrait y placer du HTML/JS (XSS côté UI) ou des caractères cassant
+    un en-tête Content-Disposition. On ne garde qu'un charset DNS/inventaire
+    sûr et on borne la longueur."""
+    if not value:
+        return None
+    cleaned = "".join(c for c in value if c.isalnum() or c in "-_.")
+    return cleaned[:253] or None
+
+
 def _extract_hostname(output: str, vendor: str) -> str | None:
     """Extrait le hostname depuis la sortie d'une commande."""
     if not output:
@@ -299,7 +311,7 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
         log.info(f"Configuration récupérée : {len(config)} octets")
         return {
             "config": config,
-            "hostname": result["hostname"] or host,
+            "hostname": _sanitize_hostname(result["hostname"]) or host,
             "vendor": vendor,
         }
 
@@ -341,6 +353,6 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
     log.info(f"Configuration récupérée : {len(config)} octets")
     return {
         "config": config,
-        "hostname": hostname or host,  # fallback sur l'IP si pas trouvé
+        "hostname": _sanitize_hostname(hostname) or host,  # fallback sur l'IP si pas trouvé/vide
         "vendor": vendor,
     }
