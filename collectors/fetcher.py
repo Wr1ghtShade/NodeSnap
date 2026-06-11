@@ -13,6 +13,7 @@ BACKUP_COMMANDS = {
     "hp_comware":     "display current-configuration",
     "paloalto":       "show config running",
     "cisco_ios":      "show running-config",
+    "cisco_s300":     "show running-config",
 }
 
 # Vendors effectivement utilisables pour un backup (sous-ensemble de VENDOR_TO_NETMIKO)
@@ -26,6 +27,7 @@ HOSTNAME_COMMANDS = {
     "hp_comware":     "display current-configuration | include sysname",
     "paloalto":       "show system info | match hostname",
     "cisco_ios":      "show running-config | include hostname",
+    "cisco_s300":     "show running-config | include hostname",
 }
 
 
@@ -44,6 +46,9 @@ def _prepare_session(conn, vendor: str):
             conn.send_command_timing("screen-length disable")
         elif vendor == "cisco_ios":
             conn.send_command_timing("terminal length 0")
+        elif vendor == "cisco_s300":
+            # Cisco SB : 'terminal datadump' désactive la pagination
+            conn.send_command_timing("terminal datadump")
         elif vendor in ("dell_os10", "dell_os6", "dell_force10", "dell_powerconnect"):
             conn.send_command_timing("terminal length 0")
         elif vendor in ("arista", "cisco_nxos", "cisco_asa", "alliedtelesis"):

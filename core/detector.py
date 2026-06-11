@@ -14,6 +14,7 @@ VENDOR_TO_NETMIKO = {
     "hp_comware":     "hp_comware",
     "paloalto":       "paloalto_panos",
     "cisco_ios":      "cisco_ios",
+    "cisco_s300":     "cisco_s300",   # Cisco Small Business SG/SF 200/300/350/500/550
     "dell_os10":      "dell_os10",
     "dell_os6":       "dell_os6",
     "dell_force10":   "dell_force10",
@@ -50,6 +51,14 @@ SIGNATURES = [
     ("show system info",   "pa-",           "paloalto"),
     ("show system info",   "palo alto",     "paloalto"),
     ("show version",       "cisco ios",     "cisco_ios"),
+    # Cisco Small Business (SG/SF 200/300/350/500/550)
+    ("show version",       "sg350",         "cisco_s300"),
+    ("show version",       "sg300",         "cisco_s300"),
+    ("show version",       "sg500",         "cisco_s300"),
+    ("show version",       "sg550",         "cisco_s300"),
+    ("show version",       "sg200",         "cisco_s300"),
+    ("show version",       "sf300",         "cisco_s300"),
+    ("show version",       "sf500",         "cisco_s300"),
     ("show version",       "os10",          "dell_os10"),
     ("show version",       "dell emc",      "dell_os10"),
     ("show version",       "dell networking", "dell_os6"),
