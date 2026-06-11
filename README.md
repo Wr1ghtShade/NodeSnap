@@ -6,7 +6,7 @@
 
 ## 📸 Aperçu
 
-> Interface disponible en thème **dark** et **light** — bascule en un clic depuis la barre de navigation.
+> Interface disponible en **5 thèmes** : Dark, Light, Dracula, Tokyo Night, Cyberpunk — sélection via le menu déroulant dans la barre de navigation.
 
 ### Dashboard
 
@@ -190,7 +190,7 @@ NodeSnap/
   - **F5 BIG-IP** (tmsh), **pfSense**, **OPNsense**, **Linux générique**
 - 🗄️ Stockage SQLite avec déduplication par SHA-256
 - 🖥️ Interface web (FastAPI + Jinja2) : dashboard, scan, visualisation de snapshots
-- 🌗 Thème dark / light avec mémorisation par cookie
+- 🎨 5 thèmes (Dark, Light, Dracula, Tokyo Night, Cyberpunk) avec mémorisation par cookie
 - ⏱️ Scheduler de backups automatiques avec gestion des échecs
 - 🔐 Credentials chiffrés AES-256-GCM
 - 📋 Journal d'audit complet

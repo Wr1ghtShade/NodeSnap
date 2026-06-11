@@ -7,7 +7,7 @@
     <script>
         // Applique le thème AVANT le rendu pour éviter le flash
         (function() {
-            var allowed = ['dark', 'light', 'dracula'];
+            var allowed = ['dark', 'light', 'dracula', 'tokyo-night', 'cyberpunk'];
             var t = document.cookie.match(/(?:^|; )nodesnap_theme=([^;]+)/);
             var theme = t ? decodeURIComponent(t[1]) : null;
             if (!theme || allowed.indexOf(theme) === -1) {
@@ -372,10 +372,44 @@
         .theme-dropdown button.active { color: var(--purple); background: rgba(188, 140, 255, 0.08); }
         .theme-dropdown button .check { margin-left: auto; color: var(--purple); font-weight: 700; opacity: 0; }
         .theme-dropdown button.active .check { opacity: 1; }
+        /* ---- THÈME TOKYO NIGHT ---- */
+        :root[data-theme="tokyo-night"] {
+            --bg:        #1a1b26;
+            --bg-alt:    #16161e;
+            --bg-hover:  #24283b;
+            --border:    #2a2c3e;
+            --text:      #c0caf5;
+            --text-dim:  #565f89;
+            --accent:    #7aa2f7;
+            --accent-h:  #82aaff;
+            --green:     #9ece6a;
+            --yellow:    #e0af68;
+            --red:       #f7768e;
+            --purple:    #bb9af7;
+            --shadow:    0 1px 3px rgba(0,0,0,0.5);
+        }
+        /* ---- THÈME CYBERPUNK ---- */
+        :root[data-theme="cyberpunk"] {
+            --bg:        #0a0014;
+            --bg-alt:    #100020;
+            --bg-hover:  #1a0030;
+            --border:    #3d0080;
+            --text:      #f0e6ff;
+            --text-dim:  #9966cc;
+            --accent:    #00f0ff;
+            --accent-h:  #00d4e0;
+            --green:     #00ff88;
+            --yellow:    #ffdd00;
+            --red:       #ff0066;
+            --purple:    #ff00ff;
+            --shadow:    0 0 15px rgba(0,240,255,0.15);
+        }
         /* Icône courante : varie selon le thème actif */
-        :root[data-theme="dark"]    .theme-current .icon::before { content: "🌑"; }
-        :root[data-theme="light"]   .theme-current .icon::before { content: "☀️"; }
-        :root[data-theme="dracula"] .theme-current .icon::before { content: "🧛"; }
+        :root[data-theme="dark"]        .theme-current .icon::before { content: "🌑"; }
+        :root[data-theme="light"]       .theme-current .icon::before { content: "☀️"; }
+        :root[data-theme="dracula"]     .theme-current .icon::before { content: "🧛"; }
+        :root[data-theme="tokyo-night"] .theme-current .icon::before { content: "🌃"; }
+        :root[data-theme="cyberpunk"]   .theme-current .icon::before { content: "⚡"; }
 
         /* ---- Responsive : masquer les libellés en dessous de 900px ---- */
         @media (max-width: 900px) {
@@ -743,6 +777,12 @@
                     </button>
                     <button type="button" data-theme="dracula" role="menuitem">
                         <span>🧛</span> Dracula <span class="check">✓</span>
+                    </button>
+                    <button type="button" data-theme="tokyo-night" role="menuitem">
+                        <span>🌃</span> Tokyo Night <span class="check">✓</span>
+                    </button>
+                    <button type="button" data-theme="cyberpunk" role="menuitem">
+                        <span>⚡</span> Cyberpunk <span class="check">✓</span>
                     </button>
                 </div>
             </div>
