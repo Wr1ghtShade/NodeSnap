@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Diff #{{ snap_a.id }}→#{{ snap_b.id }} — {{ device.common_name or device.hostname }} - NodeSnap{% endblock %}
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+    <a href="/devices/{{ device.id }}" class="btn secondary">← {{ t('common.back') }}</a>
+    <h1 style="margin:0; font-size:1.3rem;">{{ t('diff.title') }} — {{ device.common_name or device.hostname }}</h1>
+</div>
+
+<!-- En-tête : infos snapshots + stats -->
+<div class="diff-header">
+    <div class="diff-snaps">
+        <div class="diff-snap-pill base">
+            <span class="pill-label">{{ t('diff.base') }}</span>
+            <span class="pill-id">#{{ snap_a.id }}</span>
+            <span class="pill-date">{{ snap_a.created_at }}</span>
+        </div>
+        <span class="diff-arrow">→</span>
+        <div class="diff-snap-pill cmp">
+            <span class="pill-label">{{ t('diff.compare') }}</span>
+            <span class="pill-id">#{{ snap_b.id }}</span>
+            <span class="pill-date">{{ snap_b.created_at }}</span>
+        </div>
+    </div>
+    <div class="diff-stats">
+        {% if added == 0 and removed == 0 %}
+        <span class="diff-stat eq">= {{ t('diff.no_changes') }}</span>
+        {% else %}
+        <span class="diff-stat add">+{{ added }} {{ t('diff.added') }}</span>
+        <span class="diff-stat del">-{{ removed }} {{ t('diff.removed') }}</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if diff_lines %}
+<div class="diff-wrap">
+    <table class="diff-table">
+        <tbody>
+        {% for line in diff_lines %}
+            {% if line.type == 'hunk' %}
+            <tr class="d-hunk">
+                <td class="d-ln"></td>
+                <td class="d-ln"></td>
+                <td class="d-code hunk-text">{{ line.text }}</td>
+            </tr>
+            {% elif line.type == 'del' %}
+            <tr class="d-del">
+                <td class="d-ln">{{ line.old }}</td>
+                <td class="d-ln"></td>
+                <td class="d-code"><span class="d-marker">-</span>{{ line.text }}</td>
+            </tr>
+            {% elif line.type == 'add' %}
+            <tr class="d-add">
+                <td class="d-ln"></td>
+                <td class="d-ln">{{ line.new }}</td>
+                <td class="d-code"><span class="d-marker">+</span>{{ line.text }}</td>
+            </tr>
+            {% else %}
+            <tr class="d-ctx">
+                <td class="d-ln">{{ line.old }}</td>
+                <td class="d-ln">{{ line.new }}</td>
+                <td class="d-code"><span class="d-marker"> </span>{{ line.text }}</td>
+            </tr>
+            {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty">
+    <div class="icon">✓</div>
+    <p>{{ t('diff.no_changes') }}</p>
+</div>
+{% endif %}
+
+<style>
+    /* ---- En-tête diff ---- */
+    .diff-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        background: var(--bg-alt);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.25rem;
+        box-shadow: var(--shadow);
+    }
+    .diff-snaps {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .diff-snap-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.85rem;
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+    }
+    .diff-snap-pill.base { border-color: rgba(248,81,73,0.4); background: rgba(248,81,73,0.06); }
+    .diff-snap-pill.cmp  { border-color: rgba(63,185,80,0.4); background: rgba(63,185,80,0.06); }
+    .pill-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-dim);
+    }
+    .pill-id   { font-weight: 700; color: var(--text); font-family: "SF Mono", Monaco, monospace; }
+    .pill-date { color: var(--text-dim); font-size: 0.8rem; font-family: "SF Mono", Monaco, monospace; }
+    .diff-arrow { font-size: 1.2rem; color: var(--text-dim); }
+    .diff-stats { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+    .diff-stat {
+        padding: 0.3rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        font-family: "SF Mono", Monaco, monospace;
+    }
+    .diff-stat.add { color: var(--green); background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3); }
+    .diff-stat.del { color: var(--red);   background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); }
+    .diff-stat.eq  { color: var(--text-dim); background: var(--bg); border: 1px solid var(--border); font-weight: normal; }
+
+    /* ---- Table diff ---- */
+    .diff-wrap {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: auto;
+        box-shadow: var(--shadow);
+    }
+    .diff-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        background: var(--bg-alt);
+        /* override table styles from base.html */
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .diff-table td { padding: 0; border: none; }
+    .diff-table tr { border-bottom: none; }
+    .diff-table tr:hover td { background: inherit; }
+
+    .d-ln {
+        width: 52px;
+        min-width: 52px;
+        text-align: right;
+        padding: 0 0.6rem;
+        color: var(--text-dim);
+        background: var(--bg);
+        user-select: none;
+        font-size: 0.75rem;
+        border-right: 1px solid var(--border);
+        vertical-align: top;
+    }
+    .d-ln:first-child { border-right: 1px solid var(--border); }
+    .d-code {
+        padding: 0 0.75rem;
+        white-space: pre;
+        overflow-x: visible;
+        vertical-align: top;
+        width: 100%;
+    }
+    .d-marker {
+        display: inline-block;
+        width: 1.2em;
+        font-weight: 700;
+        user-select: none;
+    }
+
+    /* Couleurs des lignes */
+    tr.d-del  td          { background: rgba(248,81,73,0.1); }
+    tr.d-del  td.d-ln     { background: rgba(248,81,73,0.15); color: var(--red); }
+    tr.d-del  .d-marker   { color: var(--red); }
+
+    tr.d-add  td          { background: rgba(63,185,80,0.1); }
+    tr.d-add  td.d-ln     { background: rgba(63,185,80,0.15); color: var(--green); }
+    tr.d-add  .d-marker   { color: var(--green); }
+
+    tr.d-hunk td          { background: rgba(88,166,255,0.07); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    tr.d-hunk .d-ln       { background: rgba(88,166,255,0.1); }
+    .hunk-text            { color: var(--accent); font-weight: 600; padding: 0.2rem 0.75rem; }
+
+    tr.d-ctx  .d-marker   { color: transparent; }
+</style>
+{% endblock %}

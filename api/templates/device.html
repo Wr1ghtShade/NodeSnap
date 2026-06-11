@@ -372,11 +372,17 @@
     })();
     </script>
 
-    <h2>{{ t('dev.snapshots_title') }}</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:0.75rem;">
+        <h2 style="margin:0;">{{ t('dev.snapshots_title') }}</h2>
+        {% if snapshots|length >= 2 %}
+        <button class="btn secondary" id="btn-compare" disabled>± {{ t('diff.btn') }} <span id="compare-hint" style="font-size:0.78rem; opacity:0.7;">({{ t('diff.select_two') }})</span></button>
+        {% endif %}
+    </div>
     {% if snapshots %}
     <table class="snapshots-table">
         <thead>
             <tr>
+                {% if snapshots|length >= 2 %}<th style="width:36px; text-align:center;"></th>{% endif %}
                 <th style="width: 60px;  text-align: center;">{{ t('dev.snap_col_id') }}</th>
                 <th style="width: 180px; text-align: center;">{{ t('dev.snap_col_date') }}</th>
                 <th style="width: 110px; text-align: center;">{{ t('dev.snap_col_size') }}</th>
@@ -387,6 +393,12 @@
         <tbody>
             {% for s in snapshots %}
             <tr>
+                {% if snapshots|length >= 2 %}
+                <td style="text-align:center; padding: 0.5rem 0.6rem;">
+                    <input type="checkbox" class="snap-check" value="{{ s.id }}" data-date="{{ s.created_at }}"
+                           style="width:16px; height:16px; cursor:pointer; accent-color: var(--accent);">
+                </td>
+                {% endif %}
                 <td>#{{ s.id }}</td>
                 <td>{{ s.created_at }}</td>
                 <td style="text-align: center; white-space: nowrap;">
@@ -422,6 +434,42 @@
             line-height: 1.3;
         }
     </style>
+    {% if snapshots|length >= 2 %}
+    <script>
+    (function() {
+        const deviceId = {{ device.id }};
+        const checkboxes = Array.from(document.querySelectorAll('.snap-check'));
+        const compareBtn = document.getElementById('btn-compare');
+        const hint       = document.getElementById('compare-hint');
+        const HINT_SELECT = {{ t('diff.select_two')|tojson }};
+        const HINT_READY  = {{ t('diff.compare_ready')|tojson }};
+
+        function update() {
+            const checked = checkboxes.filter(cb => cb.checked);
+            const n = checked.length;
+            // Bloque les cases non cochées si on a déjà 2
+            checkboxes.forEach(cb => {
+                cb.disabled = !cb.checked && n >= 2;
+            });
+            compareBtn.disabled = n !== 2;
+            hint.textContent = n === 2 ? '— ' + HINT_READY : '(' + HINT_SELECT + ')';
+        }
+
+        checkboxes.forEach(cb => cb.addEventListener('change', update));
+        update();
+
+        compareBtn.addEventListener('click', function() {
+            const checked = checkboxes.filter(cb => cb.checked);
+            if (checked.length !== 2) return;
+            // Trie par date croissante : le plus ancien = référence (id1), le plus récent = comparé (id2)
+            const sorted = checked.slice().sort((a, b) => a.dataset.date < b.dataset.date ? -1 : 1);
+            const id1 = sorted[0].value;  // plus ancien = base
+            const id2 = sorted[1].value;  // plus récent = comparé
+            window.location.href = '/devices/' + deviceId + '/snapshots/' + id1 + '/diff/' + id2;
+        });
+    })();
+    </script>
+    {% endif %}
     {% else %}
     <div class="empty">
         <div class="icon">📭</div>

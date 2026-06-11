@@ -284,5 +284,17 @@
   "snap.newer": "Newer snapshot",
   "snap.older": "Older snapshot",
   "snap.copied": "✓ Configuration copied to clipboard",
-  "snap.copy_failed": "Unable to copy"
+  "snap.copy_failed": "Unable to copy",
+
+  "diff.title": "Configuration diff",
+  "diff.base": "Base",
+  "diff.compare": "Compared",
+  "diff.added": "added",
+  "diff.removed": "removed",
+  "diff.lines": "lines",
+  "diff.no_changes": "Identical configurations — no changes detected",
+  "diff.btn": "Diff",
+  "diff.select_two": "check 2 snapshots",
+  "diff.compare_ready": "ready to compare",
+  "diff.nav_select": "Compare with…"
 }

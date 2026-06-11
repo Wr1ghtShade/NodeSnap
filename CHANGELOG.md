@@ -32,7 +32,7 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Endpoint debug session supprimé
 - Permissions systemd renforcées (NoNewPrivileges, PrivateTmp, ProtectSystem…)
 
-## [1.0.9] — 2026-06-11
+## [1.1.0] — 2026-06-11
 
 ### 🌐 Couverture vendors étendue
 
@@ -52,6 +52,14 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Ajout du thème **Cyberpunk** (néon sur noir : `#0a0014`, cyan `#00f0ff`, magenta `#ff00ff`)
 - Sélecteur de thème en menu déroulant (remplace le bouton bascule Dark/Light)
 - 5 thèmes disponibles : Dark 🌑, Light ☀️, Dracula 🧛, Tokyo Night 🌃, Cyberpunk ⚡
+
+### 🔍 Diff visuel de configurations
+
+- Nouvelle page de diff entre deux snapshots quelconques d'un équipement
+- Cases à cocher sur la table des snapshots — sélection de 2 parmi N (peu importe l'écart), bouton `± Diff` qui s'active quand exactement 2 sont cochées
+- Rendu unified diff : lignes ajoutées (vert), supprimées (rouge), contexte (neutre), en-têtes de hunks `@@`
+- Numéros de lignes ancien / nouveau sur chaque ligne
+- Compatible avec les 5 thèmes
 
 ### 🖥️ Interface
 

@@ -1,6 +1,8 @@
 """NodeSnap - Endpoints REST et pages HTML."""
+import difflib
 import logging
 import os
+import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -87,6 +89,35 @@ def _safe_next(next_url: str) -> str:
     if parsed.scheme or parsed.netloc:
         return "/"
     return next_url
+
+
+def _compute_diff(text_a: str, text_b: str) -> list[dict]:
+    """Calcule un diff unifié structuré entre deux textes de config.
+    Retourne une liste de lignes typées : hunk / del / add / ctx."""
+    lines_a = text_a.splitlines()
+    lines_b = text_b.splitlines()
+    result = []
+    old_ln = new_ln = 0
+    for raw in difflib.unified_diff(lines_a, lines_b, n=3, lineterm=""):
+        if raw.startswith("--- ") or raw.startswith("+++ "):
+            continue
+        if raw.startswith("@@ "):
+            m = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
+            if m:
+                old_ln = int(m.group(1)) - 1
+                new_ln = int(m.group(2)) - 1
+            result.append({"type": "hunk", "old": "", "new": "", "text": raw})
+        elif raw.startswith("-"):
+            old_ln += 1
+            result.append({"type": "del", "old": old_ln, "new": "", "text": raw[1:]})
+        elif raw.startswith("+"):
+            new_ln += 1
+            result.append({"type": "add", "old": "", "new": new_ln, "text": raw[1:]})
+        else:
+            old_ln += 1
+            new_ln += 1
+            result.append({"type": "ctx", "old": old_ln, "new": new_ln, "text": raw[1:]})
+    return result
 
 
 def _safe_filename(name: str) -> str:
@@ -338,12 +369,13 @@ async def device_detail(request: Request, device_id: int):
         ).fetchone()
         if not device:
             raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
-        snapshots = conn.execute("""
+        snaps_raw = conn.execute("""
             SELECT id, sha256, size_bytes, created_at
             FROM config_snapshots
             WHERE device_id = ?
             ORDER BY created_at DESC
         """, (device_id,)).fetchall()
+    snapshots = [dict(s) for s in snaps_raw]
     creds = get_credentials(device_id) if has_credentials(device_id) else None
     return render(
         request, "device.html",
@@ -412,6 +444,40 @@ async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
             "total": total,
         },
     )
+
+
+@app.get("/devices/{device_id}/snapshots/{id1}/diff/{id2}", response_class=HTMLResponse)
+async def view_diff(request: Request, device_id: int, id1: int, id2: int):
+    """Page de diff entre deux snapshots d'un même équipement."""
+    with get_connection() as conn:
+        device = conn.execute(
+            "SELECT * FROM devices WHERE id = ?", (device_id,)
+        ).fetchone()
+        if not device:
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
+        snap_a = conn.execute(
+            "SELECT id, config, created_at, size_bytes FROM config_snapshots "
+            "WHERE id = ? AND device_id = ?", (id1, device_id),
+        ).fetchone()
+        snap_b = conn.execute(
+            "SELECT id, config, created_at, size_bytes FROM config_snapshots "
+            "WHERE id = ? AND device_id = ?", (id2, device_id),
+        ).fetchone()
+    if not snap_a or not snap_b:
+        raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
+
+    diff_lines = _compute_diff(snap_a["config"], snap_b["config"])
+    added   = sum(1 for l in diff_lines if l["type"] == "add")
+    removed = sum(1 for l in diff_lines if l["type"] == "del")
+
+    return render(request, "diff.html", {
+        "device":     device,
+        "snap_a":     snap_a,
+        "snap_b":     snap_b,
+        "diff_lines": diff_lines,
+        "added":      added,
+        "removed":    removed,
+    })
 
 
 # =============================================================================

@@ -284,5 +284,17 @@
   "snap.newer": "Snapshot plus récent",
   "snap.older": "Snapshot plus ancien",
   "snap.copied": "✓ Configuration copiée dans le presse-papier",
-  "snap.copy_failed": "Impossible de copier"
+  "snap.copy_failed": "Impossible de copier",
+
+  "diff.title": "Diff de configuration",
+  "diff.base": "Référence",
+  "diff.compare": "Comparé",
+  "diff.added": "ajoutées",
+  "diff.removed": "supprimées",
+  "diff.lines": "lignes",
+  "diff.no_changes": "Configurations identiques — aucun changement détecté",
+  "diff.btn": "Diff",
+  "diff.select_two": "cochez 2 snapshots",
+  "diff.compare_ready": "prêt à comparer",
+  "diff.nav_select": "Comparer avec…"
 }
