@@ -176,23 +176,76 @@ def _prepare_session(conn, vendor: str):
         log.debug(f"Préparation session ({vendor}) : {e}")
 
 
-def _escape_pfsense_menu(conn) -> None:
-    """pfSense / OPNsense affichent un menu console (0–16) par défaut en SSH.
-    L'option 8 = Shell. On l'envoie avant toute commande pour atterrir sur sh/csh.
-    Netmiko ne voit pas le menu (pas de prompt $/#) donc on utilise write/read_channel."""
+def _fetch_pfsense_raw(host: str, port: int, username: str, password: str,
+                       backup_cmd: str, hostname_cmd: str,
+                       timeout: int = 30) -> dict:
+    """Récupération via paramiko brut, bypass total du menu console pfSense/OPNsense.
+    Netmiko ne convient pas ici : il fait du prompt-matching pendant
+    session_preparation, or le menu console ne propose ni '$' ni '#'.
+    """
     import time
-    try:
-        conn.write_channel("8\n")
-        # Attente passive du shell — le menu prend ~1-2 s à céder la place
-        time.sleep(2.5)
-        # On vide le buffer (bannière du shell, "Starting shell...", etc.)
-        conn.read_channel()
-        # Envoie un retour à la ligne pour faire apparaître un prompt $/#
-        conn.write_channel("\n")
-        time.sleep(0.5)
-        conn.read_channel()
-    except Exception as e:
-        log.debug(f"Sortie du menu pfSense : {e}")
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(
+        host, port=port, username=username, password=password,
+        look_for_keys=False, allow_agent=False, timeout=timeout,
+        banner_timeout=30, auth_timeout=30,
+    )
+    log.info("Authentication (password) successful!")
+
+    chan = client.invoke_shell()
+    chan.settimeout(timeout)
+
+    # Drain de la sortie initiale (menu pfSense / login banner)
+    time.sleep(2)
+    while chan.recv_ready():
+        chan.recv(65536)
+
+    # Option 8 = Shell
+    chan.send("8\n")
+    time.sleep(2.5)
+    while chan.recv_ready():
+        chan.recv(65536)
+
+    def _run(cmd: str, max_wait: float = 60.0) -> str:
+        """Envoie la commande encadrée d'un marqueur de fin et collecte la sortie."""
+        marker = "__NS_END_OF_OUTPUT__"
+        chan.send(f"{cmd}; echo {marker}\n")
+        buf = b""
+        deadline = time.time() + max_wait
+        while time.time() < deadline:
+            if chan.recv_ready():
+                buf += chan.recv(65536)
+                if marker.encode() in buf:
+                    break
+            else:
+                time.sleep(0.15)
+        text = buf.decode("utf-8", errors="replace")
+        # Trim : on garde ce qui est entre la fin de l'écho de la commande et le marker
+        if marker in text:
+            text = text.split(marker)[0]
+        # Retire la première ligne (echo de la commande) si elle commence par cmd
+        lines = text.splitlines()
+        if lines and cmd.split(";")[0].strip() in lines[0]:
+            lines = lines[1:]
+        return "\n".join(lines).rstrip()
+
+    log.info(f"Exécution : {backup_cmd}")
+    config = _run(backup_cmd, max_wait=120)
+
+    hostname = None
+    if hostname_cmd:
+        try:
+            hn = _run(hostname_cmd, max_wait=15).strip()
+            # Garde uniquement le premier token sans espaces
+            if hn:
+                hostname = hn.split()[0] if hn.split() else None
+        except Exception as e:
+            log.debug(f"Hostname pfSense échoué : {e}")
+
+    client.close()
+    return {"config": config, "hostname": hostname}
 
 
 def _extract_hostname(output: str, vendor: str) -> str | None:
@@ -231,6 +284,25 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
     if vendor not in BACKUP_COMMANDS:
         raise ValueError(f"Pas de commande de backup définie pour : {vendor}")
 
+    # pfSense / OPNsense : bypass total de Netmiko (le menu console ne fournit pas
+    # de prompt shell, donc Netmiko bloque dès session_preparation).
+    if vendor in ("pfsense", "opnsense"):
+        log.info(f"Connexion à {host} ({vendor}, paramiko direct)...")
+        result = _fetch_pfsense_raw(
+            host, port, username, password,
+            BACKUP_COMMANDS[vendor], HOSTNAME_COMMANDS.get(vendor),
+            timeout=timeout,
+        )
+        config = result["config"]
+        if not config or len(config.strip()) < 50:
+            raise RuntimeError(f"Configuration récupérée trop courte ou vide ({len(config)} octets)")
+        log.info(f"Configuration récupérée : {len(config)} octets")
+        return {
+            "config": config,
+            "hostname": result["hostname"] or host,
+            "vendor": vendor,
+        }
+
     device_type = VENDOR_TO_NETMIKO[vendor]
     conn_params = {
         "device_type": device_type,
@@ -246,11 +318,6 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
 
     log.info(f"Connexion à {host} ({vendor} / {device_type})...")
     with ConnectHandler(**conn_params) as conn:
-        # pfSense/OPNsense présentent un menu console — on l'escape avant toute commande
-        if vendor in ("pfsense", "opnsense"):
-            log.info("Échappement du menu console (option 8 = Shell)...")
-            _escape_pfsense_menu(conn)
-
         _prepare_session(conn, vendor)
 
         # Récupération du hostname (best-effort, non bloquant)
@@ -258,10 +325,7 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
         try:
             hn_cmd = HOSTNAME_COMMANDS.get(vendor)
             if hn_cmd:
-                if vendor in ("pfsense", "opnsense"):
-                    hn_out = conn.send_command_timing(hn_cmd, read_timeout=10)
-                else:
-                    hn_out = conn.send_command(hn_cmd, read_timeout=15)
+                hn_out = conn.send_command(hn_cmd, read_timeout=15)
                 hostname = _extract_hostname(hn_out, vendor)
         except Exception as e:
             log.debug(f"Récupération hostname échouée : {e}")
@@ -269,11 +333,7 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
         # Récupération de la config complète
         backup_cmd = BACKUP_COMMANDS[vendor]
         log.info(f"Exécution : {backup_cmd}")
-        if vendor in ("pfsense", "opnsense"):
-            # send_command_timing évite la dépendance au prompt regex
-            config = conn.send_command_timing(backup_cmd, read_timeout=300, last_read=3.0)
-        else:
-            config = conn.send_command(backup_cmd, read_timeout=300)
+        config = conn.send_command(backup_cmd, read_timeout=300)
 
     if not config or len(config.strip()) < 50:
         raise RuntimeError(f"Configuration récupérée trop courte ou vide ({len(config)} octets)")
