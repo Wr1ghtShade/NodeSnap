@@ -187,7 +187,7 @@ NodeSnap/
   - **Huawei** (VRP), **Mikrotik** (RouterOS), **Extreme** (EXOS), **Allied Telesis** (AlliedWare Plus)
   - **VyOS**, **Ubiquiti** (EdgeRouter/EdgeSwitch + UniFi Switch)
   - **Nokia SR OS** (ex-Alcatel-Lucent), **Ruckus** (FastIron/ICX)
-  - **F5 BIG-IP** (tmsh), **generic Linux** (pfSense, OPNsense, servers)
+  - **F5 BIG-IP** (tmsh), **pfSense**, **OPNsense**, **generic Linux**
 - 🗄️ SQLite storage with SHA-256 deduplication
 - 🖥️ Web interface (FastAPI + Jinja2): dashboard, scan, snapshot viewer
 - 🌗 Dark / light theme with cookie persistence

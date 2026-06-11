@@ -41,7 +41,9 @@ VENDOR_TO_NETMIKO = {
     "watchguard":     "watchguard_fireware",
     "stormshield":    "stormshield_sns",
     "f5_tmsh":        "f5_tmsh",            # F5 BIG-IP
-    "linux":          "linux",              # Linux générique (pfSense, OPNsense, etc.)
+    "linux":          "linux",              # Linux générique
+    "pfsense":        "linux",              # pfSense (FreeBSD) — accès shell
+    "opnsense":       "linux",              # OPNsense (FreeBSD fork de pfSense)
 }
 
 # Mapping inverse : device_type Netmiko -> vendor interne
@@ -114,6 +116,8 @@ SIGNATURES = [
     ("show version",       "sns",           "stormshield"),
     ("show /sys version",  "big-ip",        "f5_tmsh"),
     ("show /sys version",  "f5",            "f5_tmsh"),
+    ("cat /etc/version 2>/dev/null", "pfsense", "pfsense"),
+    ("cat /usr/local/opnsense/version/opnsense 2>/dev/null", "opnsense", "opnsense"),
     ("uname -a",           "linux",         "linux"),
 ]
 

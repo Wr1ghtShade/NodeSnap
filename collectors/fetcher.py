@@ -79,6 +79,8 @@ BACKUP_COMMANDS = {
     "ruckus":             "show running-config",
     "f5_tmsh":            "list",
     "linux":              "cat /etc/network/interfaces 2>/dev/null; cat /etc/netplan/*.yaml 2>/dev/null; ip a; ip route",
+    "pfsense":            "cat /cf/conf/config.xml",
+    "opnsense":           "cat /conf/config.xml",
 }
 
 # Vendors effectivement utilisables pour un backup (sous-ensemble de VENDOR_TO_NETMIKO)
@@ -124,6 +126,8 @@ HOSTNAME_COMMANDS = {
     "ruckus":             "show running-config | include hostname",
     "f5_tmsh":            "list sys global-settings hostname",
     "linux":              "hostname",
+    "pfsense":            "hostname",
+    "opnsense":           "hostname",
 }
 
 
