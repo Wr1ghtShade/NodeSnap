@@ -7,9 +7,10 @@
     <script>
         // Applique le thème AVANT le rendu pour éviter le flash
         (function() {
+            var allowed = ['dark', 'light', 'dracula'];
             var t = document.cookie.match(/(?:^|; )nodesnap_theme=([^;]+)/);
             var theme = t ? decodeURIComponent(t[1]) : null;
-            if (!theme) {
+            if (!theme || allowed.indexOf(theme) === -1) {
                 theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
                     ? 'light' : 'dark';
             }
@@ -48,6 +49,22 @@
             --red:       #cf222e;
             --purple:    #8250df;
             --shadow:    0 1px 3px rgba(0,0,0,0.08);
+        }
+        /* ---- THÈME DRACULA ---- */
+        :root[data-theme="dracula"] {
+            --bg:        #282a36;
+            --bg-alt:    #21222c;
+            --bg-hover:  #44475a;
+            --border:    #44475a;
+            --text:      #f8f8f2;
+            --text-dim:  #6272a4;
+            --accent:    #8be9fd;
+            --accent-h:  #bd93f9;
+            --green:     #50fa7b;
+            --yellow:    #f1fa8c;
+            --red:       #ff5555;
+            --purple:    #bd93f9;
+            --shadow:    0 1px 3px rgba(0,0,0,0.4);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -299,11 +316,66 @@
             opacity: 0;
         }
         .lang-dropdown button.active .check { opacity: 1; }
-        /* ---- Toggle thème (réutilise .icon-btn) ---- */
-        :root[data-theme="dark"]  .theme-toggle .icon-sun  { display: inline; }
-        :root[data-theme="dark"]  .theme-toggle .icon-moon { display: none; }
-        :root[data-theme="light"] .theme-toggle .icon-sun  { display: none; }
-        :root[data-theme="light"] .theme-toggle .icon-moon { display: inline; }
+        /* ---- Menu thème (dropdown, calqué sur .lang-menu) ---- */
+        .theme-menu { position: relative; }
+        .theme-current {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+            padding: 0;
+        }
+        .theme-current:hover {
+            color: var(--text);
+            border-color: var(--text-dim);
+            background: var(--bg-hover);
+        }
+        .theme-current .icon { font-size: 1rem; line-height: 1; }
+        .theme-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+            min-width: 150px;
+            padding: 0.3rem;
+            z-index: 200;
+        }
+        .theme-menu.open .theme-dropdown { display: block; }
+        .theme-dropdown button {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            width: 100%;
+            padding: 0.5rem 0.7rem;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.85rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.12s;
+        }
+        .theme-dropdown button:hover { background: var(--bg-hover); }
+        .theme-dropdown button.active { color: var(--purple); background: rgba(188, 140, 255, 0.08); }
+        .theme-dropdown button .check { margin-left: auto; color: var(--purple); font-weight: 700; opacity: 0; }
+        .theme-dropdown button.active .check { opacity: 1; }
+        /* Icône courante : varie selon le thème actif */
+        :root[data-theme="dark"]    .theme-current .icon::before { content: "🌑"; }
+        :root[data-theme="light"]   .theme-current .icon::before { content: "☀️"; }
+        :root[data-theme="dracula"] .theme-current .icon::before { content: "🧛"; }
 
         /* ---- Responsive : masquer les libellés en dessous de 900px ---- */
         @media (max-width: 900px) {
@@ -658,19 +730,22 @@
                     </button>
                 </div>
             </div>
-            <button class="icon-btn theme-toggle" id="theme-toggle" title="{{ t('nav.theme_toggle') }}" aria-label="{{ t('nav.theme_toggle') }}">
-                <span class="icon-sun">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="4"/>
-                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-                    </svg>
-                </span>
-                <span class="icon-moon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                    </svg>
-                </span>
-            </button>
+            <div class="theme-menu" id="theme-menu">
+                <button type="button" class="theme-current" id="theme-current" aria-haspopup="true" aria-expanded="false" title="{{ t('nav.theme_toggle') }}">
+                    <span class="icon"></span>
+                </button>
+                <div class="theme-dropdown" role="menu">
+                    <button type="button" data-theme="dark" role="menuitem">
+                        <span>🌑</span> Dark <span class="check">✓</span>
+                    </button>
+                    <button type="button" data-theme="light" role="menuitem">
+                        <span>☀️</span> Light <span class="check">✓</span>
+                    </button>
+                    <button type="button" data-theme="dracula" role="menuitem">
+                        <span>🧛</span> Dracula <span class="check">✓</span>
+                    </button>
+                </div>
+            </div>
             {% if user %}
             <a href="/logout" class="icon-btn logout" title="{{ t('nav.logout') }}" aria-label="{{ t('nav.logout') }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -742,13 +817,42 @@
         })();
 
         // Switcher de thème : inverse et mémorise dans un cookie (1 an)
-        document.getElementById('theme-toggle').addEventListener('click', function() {
-            var current = document.documentElement.getAttribute('data-theme') || 'dark';
-            var next = current === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', next);
-            var maxAge = 60 * 60 * 24 * 365; // 1 an
-            document.cookie = 'nodesnap_theme=' + next + '; path=/; max-age=' + maxAge + '; samesite=lax';
-        });
+        // ---- Menu de thème (dark / light / dracula) ----
+        (function() {
+            var menu = document.getElementById('theme-menu');
+            var trigger = document.getElementById('theme-current');
+            if (!menu || !trigger) return;
+
+            function markActive() {
+                var current = document.documentElement.getAttribute('data-theme') || 'dark';
+                menu.querySelectorAll('[data-theme]').forEach(function(b) {
+                    b.classList.toggle('active', b.dataset.theme === current);
+                });
+            }
+            markActive();
+
+            trigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var isOpen = menu.classList.toggle('open');
+                trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            });
+            document.addEventListener('click', function(e) {
+                if (!menu.contains(e.target)) {
+                    menu.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            menu.querySelectorAll('[data-theme]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var theme = btn.dataset.theme;
+                    document.documentElement.setAttribute('data-theme', theme);
+                    document.cookie = 'nodesnap_theme=' + theme + '; path=/; max-age=' + (60*60*24*365) + '; samesite=lax';
+                    markActive();
+                    menu.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                });
+            });
+        })();
     </script>
 
     <script>
