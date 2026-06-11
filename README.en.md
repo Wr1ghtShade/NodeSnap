@@ -273,9 +273,89 @@ NodeSnap ships with a background scheduler that automatically triggers backups a
 
 ### CLI (one-off scan)
 
-```bash
-./nodesnap.py 192.168.1.1 admin --common-name "Core switch"
 ```
+Usage: ./nodesnap.py <host> <user> [password] [options]
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | positional | — | Device IP address or hostname |
+| `user` | positional | — | SSH username |
+| `password` | positional optional | prompt | SSH password (see methods below) |
+| `--vendor` | option | auto-detect | Force device type |
+| `--port` | option | `22` | SSH port |
+| `--output` | option | `./backups` | Directory for `.cfg` backup files |
+| `--common-name` | option | — | Display name in the UI (e.g. "Paris Prod Firewall") |
+| `--location` | option | — | Physical location (e.g. "DC Paris - Rack 12") |
+| `--comment` | option | — | Free-form note shown on the device page |
+| `-v` / `--verbose` | flag | — | Enable DEBUG logging |
+
+**3 ways to supply the password (by priority order):**
+
+```bash
+# 1. Interactive masked prompt (recommended — leaves nothing in shell history)
+./nodesnap.py 192.168.1.1 admin
+
+# 2. Environment variable (suited for scripts)
+NODESNAP_PASSWORD='mypass' ./nodesnap.py 192.168.1.1 admin
+
+# 3. Direct argument (not recommended — visible in shell history)
+./nodesnap.py 192.168.1.1 admin mypass
+```
+
+**Examples:**
+
+```bash
+# Minimal scan — vendor auto-detected, password prompted interactively
+./nodesnap.py 192.168.1.1 admin
+
+# With a custom name (displayed on the dashboard instead of the hostname)
+./nodesnap.py 192.168.1.1 admin --common-name "Core switch Lyon"
+
+# With all metadata fields
+./nodesnap.py 192.168.1.1 admin \
+    --common-name "Paris Prod Firewall" \
+    --location "DC Paris - Room A / Rack 12" \
+    --comment "HA production FW paired with FW02. Maintenance 1st Tuesday of the month."
+
+# Force vendor (skips the auto-detection phase)
+./nodesnap.py 192.168.1.1 admin --vendor fortinet
+./nodesnap.py 192.168.1.1 admin --vendor cisco_ios
+./nodesnap.py 192.168.1.1 admin --vendor ubiquiti_edge
+
+# Non-standard SSH port
+./nodesnap.py 192.168.1.1 admin --port 2222
+
+# Custom output directory for .cfg files
+./nodesnap.py 192.168.1.1 admin --output /mnt/nas/backups/network
+
+# Verbose mode (DEBUG logs — useful for diagnosing SSH issues)
+./nodesnap.py 192.168.1.1 admin -v
+
+# Scripted/automated use — all options combined
+NODESNAP_PASSWORD="$SECRET" ./nodesnap.py 10.0.0.254 admin \
+    --vendor paloalto --port 22 \
+    --common-name "DMZ Firewall" \
+    --location "Server room" \
+    --output /opt/backups
+```
+
+**Supported vendors:**
+
+```
+Firewalls    : fortinet, paloalto, cisco_asa, checkpoint, sonicwall,
+               watchguard, stormshield
+Cisco        : cisco_ios, cisco_xe, cisco_xr, cisco_nxos, cisco_s300
+HPE/Aruba    : aruba_cx, aruba_procurve, hp_comware
+Others       : juniper, arista, huawei, mikrotik, extreme_exos,
+               alliedtelesis, vyos, nokia_sros, ruckus
+Ubiquiti     : ubiquiti_edge, ubiquiti_unifi
+F5 / Linux   : f5_tmsh, linux
+BSD Firewalls: pfsense, opnsense
+Dell         : dell_os10, dell_os6, dell_force10, dell_powerconnect
+```
+
+> Metadata (`--common-name`, `--location`, `--comment`) is **preserved** on subsequent rescans if not passed again as arguments.
 
 ## 🖥️ Deployment (systemd service)
 
@@ -310,7 +390,7 @@ journalctl -u nodesnap-web -n 100 -f          # Last 100 lines + follow
 journalctl -u nodesnap-web --since today -f   # Logs since today
 journalctl -u nodesnap-web -p err -f          # Errors only
 
-./nodesnap.py <ip> <user>             # Manual device backup
+./nodesnap.py <ip> <user> [options]   # Manual backup (see CLI section above)
 ```
 
 ## 🏷️ Versioning
