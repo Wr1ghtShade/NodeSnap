@@ -193,9 +193,13 @@ NodeSnap/
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate            # bash / zsh
+# source .venv/bin/activate.fish     # fish shell
+# source .venv/bin/activate.csh      # csh / tcsh
 pip install -r requirements.txt
 ```
+
+> 💡 On **fish** or **csh**, use the matching variant (`activate.fish` or `activate.csh`) — otherwise the shell will throw a parse error on `VIRTUAL_ENV=…`.
 
 ## 🔧 Configuration
 
