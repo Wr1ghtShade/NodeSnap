@@ -375,7 +375,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:0.75rem;">
         <h2 style="margin:0;">{{ t('dev.snapshots_title') }}</h2>
         {% if snapshots|length >= 2 %}
-        <button class="btn secondary" id="btn-compare" disabled>± {{ t('diff.btn') }} <span id="compare-hint" style="font-size:0.78rem; opacity:0.7;">({{ t('diff.select_two') }})</span></button>
+        <button class="btn-diff" id="btn-compare" disabled>± {{ t('diff.btn') }} <span id="compare-hint" class="diff-hint">({{ t('diff.select_two') }})</span></button>
         {% endif %}
     </div>
     {% if snapshots %}
@@ -432,6 +432,43 @@
             word-break: break-all;
             display: inline-block;
             line-height: 1.3;
+        }
+        /* Bouton diff — couleur thème, s'illumine quand 2 snapshots cochés */
+        .btn-diff {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            height: 36px;
+            padding: 0 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+            /* repos : contour purple atténué, fond transparent */
+            background: rgba(188, 140, 255, 0.08);
+            border: 1px solid rgba(188, 140, 255, 0.35);
+            color: var(--purple);
+            opacity: 0.6;
+        }
+        .btn-diff:disabled { cursor: not-allowed; }
+        .btn-diff:not(:disabled) {
+            /* actif (2 cochés) : purple vif */
+            opacity: 1;
+            background: rgba(188, 140, 255, 0.18);
+            border-color: var(--purple);
+            box-shadow: 0 0 0 0px var(--purple);
+        }
+        .btn-diff:not(:disabled):hover {
+            background: rgba(188, 140, 255, 0.28);
+            box-shadow: 0 0 0 2px rgba(188, 140, 255, 0.25);
+        }
+        .diff-hint {
+            font-size: 0.76rem;
+            opacity: 0.75;
+            font-weight: 400;
         }
     </style>
     {% if snapshots|length >= 2 %}
