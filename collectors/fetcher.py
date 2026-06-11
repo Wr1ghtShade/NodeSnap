@@ -1,5 +1,6 @@
 """NodeSnap - Récupération des configurations selon le vendor."""
 import logging
+import re
 import paramiko
 from netmiko import ConnectHandler
 from core.detector import VENDOR_TO_NETMIKO
@@ -248,6 +249,64 @@ def _fetch_pfsense_raw(host: str, port: int, username: str, password: str,
     return {"config": config, "hostname": hostname}
 
 
+# ---------------------------------------------------------------------------
+# Filtrage des lignes volatiles avant stockage
+# Certains équipements incluent dans leur "show running-config" des données
+# opérationnelles (uptime, compteurs, timestamps) qui changent à chaque run
+# sans refléter un vrai changement de configuration. On les retire avant
+# de calculer le SHA-256 et de stocker la config, pour éviter les faux positifs
+# de déduplication.
+# Ajouter ici les patterns de chaque vendor concerné.
+# ---------------------------------------------------------------------------
+_VOLATILE_PATTERNS: dict[str, list[re.Pattern]] = {
+    # Ubiquiti EdgeRouter / EdgeSwitch
+    "ubiquiti_edge": [
+        re.compile(r"^!?\s*System\s+Up\s+Time.*$",  re.IGNORECASE | re.MULTILINE),
+        re.compile(r"^\s*uptime\s+\d.*$",            re.IGNORECASE | re.MULTILINE),
+        re.compile(r"^\s*system[\s-]uptime.*$",      re.IGNORECASE | re.MULTILINE),
+    ],
+    # Ubiquiti UniFi Switch : en-tête "!System Up Time   "64 days...""
+    "ubiquiti_unifi": [
+        re.compile(r"^!?\s*System\s+Up\s+Time.*$",   re.IGNORECASE | re.MULTILINE),
+        re.compile(r"^\s*uptime\s+\d.*$",            re.IGNORECASE | re.MULTILINE),
+    ],
+    # Linux : "ip a" peut inclure des compteurs RX/TX et des timestamps
+    "linux": [
+        re.compile(r"^\s+(?:RX|TX)\s+(?:packets|bytes|errors|dropped).*$",
+                   re.IGNORECASE | re.MULTILINE),
+        re.compile(r"^\s+valid_lft\s+\d+sec\s+preferred_lft\s+\d+sec.*$",
+                   re.IGNORECASE | re.MULTILINE),
+    ],
+    # Mikrotik RouterOS : "/system clock print" peut apparaître, uptime dans export
+    "mikrotik": [
+        re.compile(r"^\s*uptime=\S+.*$",             re.IGNORECASE | re.MULTILINE),
+    ],
+    # F5 BIG-IP : certaines versions incluent des stats dans list
+    "f5_tmsh": [
+        re.compile(r"^\s+last-modified-time\s+\S+.*$", re.IGNORECASE | re.MULTILINE),
+    ],
+}
+
+
+def _strip_volatile(config: str, vendor: str) -> str:
+    """Retire les lignes volatiles d'une config avant stockage.
+    Les lignes supprimées ne reflètent pas un changement de configuration
+    (uptime, compteurs, timestamps) et provoqueraient des faux positifs
+    de déduplication SHA-256."""
+    patterns = _VOLATILE_PATTERNS.get(vendor, [])
+    if not patterns:
+        return config
+    result = config
+    for pat in patterns:
+        result = pat.sub("", result)
+    # Retire les lignes vides consécutives laissées par les suppressions
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    stripped = len(config) - len(result)
+    if stripped > 0:
+        log.debug(f"_strip_volatile({vendor}) : {stripped} caractères volatils retirés")
+    return result
+
+
 def _sanitize_hostname(value: str | None) -> str | None:
     """Nettoie un hostname extrait d'un équipement (potentiellement hostile).
     Un hostname est une donnée contrôlée par l'équipement scanné : un device
@@ -305,7 +364,7 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
             BACKUP_COMMANDS[vendor], HOSTNAME_COMMANDS.get(vendor),
             timeout=timeout,
         )
-        config = result["config"]
+        config = _strip_volatile(result["config"], vendor)
         if not config or len(config.strip()) < 50:
             raise RuntimeError(f"Configuration récupérée trop courte ou vide ({len(config)} octets)")
         log.info(f"Configuration récupérée : {len(config)} octets")
@@ -350,6 +409,9 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
     if not config or len(config.strip()) < 50:
         raise RuntimeError(f"Configuration récupérée trop courte ou vide ({len(config)} octets)")
 
+    config = _strip_volatile(config, vendor)
+    if not config or len(config.strip()) < 50:
+        raise RuntimeError(f"Configuration récupérée trop courte ou vide ({len(config)} octets)")
     log.info(f"Configuration récupérée : {len(config)} octets")
     return {
         "config": config,
