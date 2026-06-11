@@ -7,28 +7,36 @@ from core.detector import VENDOR_TO_NETMIKO
 log = logging.getLogger(__name__)
 
 
-# ---- Workaround paramiko pour Cisco Small Business (SG/SF 200/300/350/500/550) ----
-# Ces switches annoncent allowed_types=[''] (liste vide) au lieu de password ou
-# keyboard-interactive. Paramiko lève BadAuthenticationType avant même de tenter
-# l'authentification. On wrappe Transport.auth_password pour rebasculer en
-# keyboard-interactive quand on détecte ce cas pathologique.
-_original_auth_password = paramiko.Transport.auth_password
+# ---- Workaround paramiko 4.x pour SSH servers legacy (Cisco SBSwitch, vieux firmwares) ----
+# OpenSSH 9 et paramiko 4 ont retiré les algos SHA-1 par défaut pour des raisons
+# de sécurité. Or beaucoup d'équipements réseau (Cisco SG/SF, HP ProCurve, vieux
+# Aruba, etc.) ne proposent QUE ces algos. On les réactive explicitement côté
+# paramiko pour pouvoir s'y connecter.
+_LEGACY_KEX = (
+    "diffie-hellman-group14-sha1",
+    "diffie-hellman-group1-sha1",
+    "diffie-hellman-group-exchange-sha1",
+)
+_LEGACY_CIPHERS = ("aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc")
+_LEGACY_MACS = ("hmac-sha1", "hmac-sha1-96", "hmac-md5")
+_LEGACY_HOSTKEYS = ("ssh-rsa", "ssh-dss")
 
 
-def _patched_auth_password(self, username, password, event=None, fallback=True):
-    try:
-        return _original_auth_password(self, username, password, event, fallback)
-    except paramiko.BadAuthenticationType as e:
-        # allowed_types vide ou [''] -> on tente keyboard-interactive
-        if not e.allowed_types or all(not t for t in e.allowed_types):
-            log.warning(f"SSH allowed_types={e.allowed_types}, fallback keyboard-interactive")
-            def _handler(title, instructions, prompts):
-                return [password for _ in prompts]
-            return self.auth_interactive(username, _handler)
-        raise
+def _ensure(seq, extras):
+    out = list(seq)
+    for x in extras:
+        if x not in out:
+            out.append(x)
+    return tuple(out)
 
 
-paramiko.Transport.auth_password = _patched_auth_password
+paramiko.Transport._preferred_kex = _ensure(paramiko.Transport._preferred_kex, _LEGACY_KEX)
+paramiko.Transport._preferred_ciphers = _ensure(paramiko.Transport._preferred_ciphers, _LEGACY_CIPHERS)
+paramiko.Transport._preferred_macs = _ensure(paramiko.Transport._preferred_macs, _LEGACY_MACS)
+paramiko.Transport._preferred_keys = _ensure(paramiko.Transport._preferred_keys, _LEGACY_HOSTKEYS)
+paramiko.Transport._preferred_pubkeys = _ensure(paramiko.Transport._preferred_pubkeys, _LEGACY_HOSTKEYS)
+
+log.debug("paramiko legacy algorithms réactivés (KEX SHA-1, AES-CBC, HMAC-SHA1, ssh-rsa)")
 # -----------------------------------------------------------------------------
 
 # Commande de récupération de la config complète par vendor
