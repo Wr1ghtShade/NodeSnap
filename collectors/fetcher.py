@@ -41,13 +41,44 @@ log.debug("paramiko legacy algorithms réactivés (KEX SHA-1, AES-CBC, HMAC-SHA1
 
 # Commande de récupération de la config complète par vendor
 BACKUP_COMMANDS = {
-    "fortinet":       "show full-configuration",
-    "aruba_cx":       "show running-config",
-    "aruba_procurve": "show running-config",
-    "hp_comware":     "display current-configuration",
-    "paloalto":       "show config running",
-    "cisco_ios":      "show running-config",
-    "cisco_s300":     "show running-config",
+    # Firewalls
+    "fortinet":           "show full-configuration",
+    "paloalto":           "show config running",
+    "cisco_asa":          "show running-config",
+    "checkpoint":         "show configuration",
+    "sonicwall":          "show current-config",
+    "watchguard":         "show configuration",
+    "stormshield":        "cat /usr/Firewall/ConfigFiles/global",
+    # Cisco familles
+    "cisco_ios":          "show running-config",
+    "cisco_xe":           "show running-config",
+    "cisco_xr":           "show running-config",
+    "cisco_nxos":         "show running-config",
+    "cisco_s300":         "show running-config",
+    # HPE / Aruba
+    "aruba_cx":           "show running-config",
+    "aruba_procurve":     "show running-config",
+    "hp_comware":         "display current-configuration",
+    # Juniper / Arista
+    "juniper":            "show configuration | display set | no-more",
+    "arista":             "show running-config",
+    # Dell
+    "dell_os10":          "show running-configuration",
+    "dell_os6":           "show running-config",
+    "dell_force10":       "show running-config",
+    "dell_powerconnect":  "show running-config",
+    # Huawei / Mikrotik / autres
+    "huawei":             "display current-configuration",
+    "mikrotik":           "/export terse",
+    "extreme_exos":       "show configuration",
+    "alliedtelesis":      "show running-config",
+    "vyos":               "show configuration commands",
+    "ubiquiti_edge":      "show running-config",
+    "ubiquiti_unifi":     "show running-config",
+    "nokia_sros":         "admin display-config detail",
+    "ruckus":             "show running-config",
+    "f5_tmsh":            "list",
+    "linux":              "cat /etc/network/interfaces 2>/dev/null; cat /etc/netplan/*.yaml 2>/dev/null; ip a; ip route",
 }
 
 # Vendors effectivement utilisables pour un backup (sous-ensemble de VENDOR_TO_NETMIKO)
@@ -55,13 +86,44 @@ SUPPORTED_VENDORS = set(BACKUP_COMMANDS.keys())
 
 # Commande pour récupérer le hostname (utile pour l'inventaire)
 HOSTNAME_COMMANDS = {
-    "fortinet":       "get system status | grep Hostname",
-    "aruba_cx":       "show hostname",
-    "aruba_procurve": "show running-config | include hostname",
-    "hp_comware":     "display current-configuration | include sysname",
-    "paloalto":       "show system info | match hostname",
-    "cisco_ios":      "show running-config | include hostname",
-    "cisco_s300":     "show running-config | include hostname",
+    # Firewalls
+    "fortinet":           "get system status | grep Hostname",
+    "paloalto":           "show system info | match hostname",
+    "cisco_asa":          "show running-config | include hostname",
+    "checkpoint":         "show hostname",
+    "sonicwall":          "show hostname",
+    "watchguard":         "show system",
+    "stormshield":        "hostname",
+    # Cisco
+    "cisco_ios":          "show running-config | include hostname",
+    "cisco_xe":           "show running-config | include hostname",
+    "cisco_xr":           "show running-config | include hostname",
+    "cisco_nxos":         "show running-config | include hostname",
+    "cisco_s300":         "show running-config | include hostname",
+    # HPE / Aruba
+    "aruba_cx":           "show hostname",
+    "aruba_procurve":     "show running-config | include hostname",
+    "hp_comware":         "display current-configuration | include sysname",
+    # Juniper / Arista
+    "juniper":            "show configuration system host-name",
+    "arista":             "show running-config | include hostname",
+    # Dell
+    "dell_os10":          "show running-configuration | grep hostname",
+    "dell_os6":           "show running-config | include hostname",
+    "dell_force10":       "show running-config | include hostname",
+    "dell_powerconnect":  "show running-config | include hostname",
+    # Autres
+    "huawei":             "display current-configuration | include sysname",
+    "mikrotik":           "/system identity print",
+    "extreme_exos":       "show switch | include SysName",
+    "alliedtelesis":      "show running-config | include hostname",
+    "vyos":               "show configuration commands | match host-name",
+    "ubiquiti_edge":      "show running-config | include hostname",
+    "ubiquiti_unifi":     "show running-config | include hostname",
+    "nokia_sros":         "show system information | match Name",
+    "ruckus":             "show running-config | include hostname",
+    "f5_tmsh":            "list sys global-settings hostname",
+    "linux":              "hostname",
 }
 
 
@@ -69,7 +131,6 @@ def _prepare_session(conn, vendor: str):
     """Désactive la pagination et prépare la session selon le vendor."""
     try:
         if vendor == "fortinet":
-            # Désactive la pagination Fortinet (sortie complète d'un coup)
             conn.send_command_timing("config system console")
             conn.send_command_timing("set output standard")
             conn.send_command_timing("end")
@@ -78,14 +139,15 @@ def _prepare_session(conn, vendor: str):
             conn.send_command_timing("terminal length 1000")
         elif vendor == "hp_comware":
             conn.send_command_timing("screen-length disable")
-        elif vendor == "cisco_ios":
-            conn.send_command_timing("terminal length 0")
         elif vendor == "cisco_s300":
             # Cisco SB : 'terminal datadump' désactive la pagination
             conn.send_command_timing("terminal datadump")
-        elif vendor in ("dell_os10", "dell_os6", "dell_force10", "dell_powerconnect"):
-            conn.send_command_timing("terminal length 0")
-        elif vendor in ("arista", "cisco_nxos", "cisco_asa", "alliedtelesis"):
+        elif vendor in (
+            "cisco_ios", "cisco_xe", "cisco_xr", "cisco_nxos", "cisco_asa",
+            "dell_os10", "dell_os6", "dell_force10", "dell_powerconnect",
+            "arista", "alliedtelesis", "ubiquiti_edge", "ubiquiti_unifi",
+            "ruckus",
+        ):
             conn.send_command_timing("terminal length 0")
         elif vendor == "huawei":
             conn.send_command_timing("screen-length 0 temporary")
@@ -95,7 +157,17 @@ def _prepare_session(conn, vendor: str):
             conn.send_command_timing("disable clipaging")
         elif vendor == "checkpoint":
             conn.send_command_timing("set clienv rows 0")
-        # Palo Alto gère la pagination automatiquement via Netmiko
+        elif vendor == "vyos":
+            # VyOS hérite du shell Linux, pagination en `less`. On désactive.
+            conn.send_command_timing("set terminal length 0")
+        elif vendor == "nokia_sros":
+            conn.send_command_timing("environment no more")
+        elif vendor == "sonicwall":
+            conn.send_command_timing("no cli pager session")
+        elif vendor == "f5_tmsh":
+            # F5 tmsh : désactive la pagination
+            conn.send_command_timing("modify cli preference pager disabled")
+        # Palo Alto, Mikrotik, Stormshield, Linux : pas de pagination à gérer
     except Exception as e:
         log.debug(f"Préparation session ({vendor}) : {e}")
 

@@ -14,6 +14,8 @@ VENDOR_TO_NETMIKO = {
     "hp_comware":     "hp_comware",
     "paloalto":       "paloalto_panos",
     "cisco_ios":      "cisco_ios",
+    "cisco_xe":       "cisco_xe",     # IOS-XE (Catalyst récents, ISR)
+    "cisco_xr":       "cisco_xr",     # IOS-XR (ASR, NCS)
     "cisco_s300":     "cisco_s300",   # Cisco Small Business SG/SF 200/300/350/500/550
     "dell_os10":      "dell_os10",
     "dell_os6":       "dell_os6",
@@ -27,12 +29,19 @@ VENDOR_TO_NETMIKO = {
     "huawei":         "huawei",
     "mikrotik":       "mikrotik_routeros",
     "alliedtelesis":  "alliedtelesis_awplus",
+    "vyos":           "vyos",
+    "ubiquiti_edge":  "ubiquiti_edge",     # EdgeRouter, EdgeSwitch
+    "ubiquiti_unifi": "ubiquiti_unifiswitch",
+    "nokia_sros":     "nokia_sros",        # ex-Alcatel-Lucent 7750
+    "ruckus":         "ruckus_fastiron",
     # Pack firewall
     "checkpoint":     "checkpoint_gaia",
     "sonicwall":      "sonicwall_sonicos",
     "cisco_asa":      "cisco_asa",
     "watchguard":     "watchguard_fireware",
     "stormshield":    "stormshield_sns",
+    "f5_tmsh":        "f5_tmsh",            # F5 BIG-IP
+    "linux":          "linux",              # Linux générique (pfSense, OPNsense, etc.)
 }
 
 # Mapping inverse : device_type Netmiko -> vendor interne
@@ -50,6 +59,10 @@ SIGNATURES = [
     ("display version",    "comware",       "hp_comware"),
     ("show system info",   "pa-",           "paloalto"),
     ("show system info",   "palo alto",     "paloalto"),
+    ("show version",       "ios xe",        "cisco_xe"),
+    ("show version",       "ios-xe",        "cisco_xe"),
+    ("show version",       "ios xr",        "cisco_xr"),
+    ("show version",       "ios-xr",        "cisco_xr"),
     ("show version",       "cisco ios",     "cisco_ios"),
     # Cisco Small Business (SG/SF 200/300/350/500/550)
     ("show version",       "sg350",         "cisco_s300"),
@@ -78,6 +91,16 @@ SIGNATURES = [
     ("/system resource print",  "mikrotik", "mikrotik"),
     ("show version",       "alliedware",    "alliedtelesis"),
     ("show version",       "awplus",        "alliedtelesis"),
+    ("show version",       "vyos",          "vyos"),
+    ("show version",       "edgerouter",    "ubiquiti_edge"),
+    ("show version",       "edgeswitch",    "ubiquiti_edge"),
+    ("show version",       "ubiquiti",      "ubiquiti_edge"),
+    ("show version",       "unifi",         "ubiquiti_unifi"),
+    ("show version",       "timos",         "nokia_sros"),
+    ("show version",       "nokia",         "nokia_sros"),
+    ("show version",       "alcatel",       "nokia_sros"),
+    ("show version",       "fastiron",      "ruckus"),
+    ("show version",       "icx",           "ruckus"),
     # Firewalls
     ("show version",       "gaia",          "checkpoint"),
     ("show version",       "check point",   "checkpoint"),
@@ -89,6 +112,9 @@ SIGNATURES = [
     ("show sysinfo",       "watchguard",    "watchguard"),
     ("show version",       "stormshield",   "stormshield"),
     ("show version",       "sns",           "stormshield"),
+    ("show /sys version",  "big-ip",        "f5_tmsh"),
+    ("show /sys version",  "f5",            "f5_tmsh"),
+    ("uname -a",           "linux",         "linux"),
 ]
 
 

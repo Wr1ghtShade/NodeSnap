@@ -32,6 +32,18 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - Endpoint debug session supprimé
 - Permissions systemd renforcées (NoNewPrivileges, PrivateTmp, ProtectSystem…)
 
+## [Unreleased]
+
+### 🌐 Couverture vendors étendue
+
+- Passage de **7 à 32 vendors supportés** end-to-end (détection + backup + hostname)
+- **Cisco** : ajout de IOS-XE, IOS-XR, NX-OS, ASA (en plus de IOS et SG/SF Small Business)
+- **Firewalls** : ajout de Checkpoint Gaia, SonicWall, WatchGuard, Stormshield
+- **Autres** : Juniper Junos, Arista EOS, Dell (OS10/OS6/Force10/PowerConnect), Huawei VRP, Mikrotik RouterOS, Extreme EXOS, Allied Telesis AWPlus, VyOS, Ubiquiti EdgeRouter/EdgeSwitch/UniFi Switch, Nokia SR OS, Ruckus FastIron/ICX, F5 BIG-IP (tmsh), Linux générique
+- Workaround paramiko 4.x : réactivation des algos SSH legacy (KEX SHA-1, AES-CBC, HMAC-SHA1, ssh-rsa) pour la compat avec les firmwares anciens (Cisco SBSwitch, vieux Aruba, etc.)
+- Création automatique du dossier `api/static/` au boot (fix RuntimeError sur fresh clone)
+- `deploy/install.sh` : retrait du flag `--quiet` de pip pour voir la progression sur ARM/RPi
+
 ## [1.0.3] — 2026-06-09
 
 ### 🌍 Internationalisation

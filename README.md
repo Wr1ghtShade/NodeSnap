@@ -178,7 +178,16 @@ NodeSnap/
 ## ✨ Fonctionnalités
 
 - 🔍 Détection automatique du vendor via SSH (Netmiko)
-- 🌐 Vendors supportés : Fortinet, Aruba CX, Aruba ProCurve, HP Comware, Palo Alto, Cisco IOS
+- 🌐 **32 vendors supportés** end-to-end (détection + backup + hostname) :
+  - **Cisco** : IOS, IOS-XE, IOS-XR, NX-OS, ASA, Small Business (SG/SF 200/300/350/500/550)
+  - **HPE / Aruba** : Aruba CX, Aruba ProCurve, HP Comware
+  - **Firewalls** : Fortinet, Palo Alto, Checkpoint, SonicWall, WatchGuard, Stormshield
+  - **Juniper** (Junos), **Arista** (EOS)
+  - **Dell** : OS10, OS6, Force10, PowerConnect
+  - **Huawei** (VRP), **Mikrotik** (RouterOS), **Extreme** (EXOS), **Allied Telesis** (AlliedWare Plus)
+  - **VyOS**, **Ubiquiti** (EdgeRouter/EdgeSwitch + UniFi Switch)
+  - **Nokia SR OS** (ex-Alcatel-Lucent), **Ruckus** (FastIron/ICX)
+  - **F5 BIG-IP** (tmsh), **Linux générique** (pfSense, OPNsense, serveurs)
 - 🗄️ Stockage SQLite avec déduplication par SHA-256
 - 🖥️ Interface web (FastAPI + Jinja2) : dashboard, scan, visualisation de snapshots
 - 🌗 Thème dark / light avec mémorisation par cookie
