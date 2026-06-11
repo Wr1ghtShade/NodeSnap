@@ -293,6 +293,8 @@
   "diff.removed": "removed",
   "diff.lines": "lines",
   "diff.no_changes": "Identical configurations — no changes detected",
+  "dev.export_zip": "Export ZIP",
+  "dev.export_zip_title": "Download all snapshots as a ZIP archive",
   "diff.btn": "Diff",
   "diff.select_two": "check 2 snapshots",
   "diff.compare_ready": "ready to compare",

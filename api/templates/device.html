@@ -19,6 +19,9 @@
         </div>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             <button class="btn secondary" id="btn-edit">✎ {{ t('common.edit') }}</button>
+            {% if snapshots %}
+            <a href="/api/devices/{{ device.id }}/export.zip" class="btn secondary" title="{{ t('dev.export_zip_title') }}">⬇ {{ t('dev.export_zip') }}</a>
+            {% endif %}
             <form method="post" action="/devices/{{ device.id }}/delete" style="display: inline;"
                   onsubmit="return confirm({{ t('dev.confirm_delete', name=(device.common_name or device.hostname))|tojson }});">
                 <button type="submit" class="btn danger">🗑 {{ t('dev.delete') }}</button>

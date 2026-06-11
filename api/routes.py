@@ -1,13 +1,16 @@
 """NodeSnap - Endpoints REST et pages HTML."""
 import difflib
+import io
+import json
 import logging
 import os
 import re
+import zipfile
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from fastapi import Request, HTTPException, Form
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from starlette.status import HTTP_302_FOUND
 
 from api.main import app, render, templates, HTTPS_ONLY
@@ -599,6 +602,56 @@ async def download_snapshot_json(request: Request, snapshot_id: int):
     return JSONResponse(
         payload,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/devices/{device_id}/export.zip")
+async def export_device_zip(request: Request, device_id: int):
+    """Exporte tous les snapshots d'un équipement dans une archive ZIP."""
+    with get_connection() as conn:
+        device = conn.execute(
+            "SELECT * FROM devices WHERE id = ?", (device_id,)
+        ).fetchone()
+        if not device:
+            raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
+        snapshots = conn.execute(
+            "SELECT id, config, created_at, sha256, size_bytes "
+            "FROM config_snapshots WHERE device_id = ? ORDER BY created_at ASC",
+            (device_id,),
+        ).fetchall()
+
+    buf = io.BytesIO()
+    safe_host = _safe_filename(device["hostname"] or device["ip_address"])
+
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        # Fiche équipement
+        meta = {
+            "device_id":      device["id"],
+            "hostname":       device["hostname"],
+            "ip_address":     device["ip_address"],
+            "vendor":         device["vendor"],
+            "common_name":    device["common_name"],
+            "location":       device["location"],
+            "comment":        device["comment"],
+            "first_seen":     device["first_seen"],
+            "last_seen":      device["last_seen"],
+            "snapshot_count": len(snapshots),
+            "exported_at":    datetime.now().isoformat(timespec="seconds"),
+        }
+        zf.writestr("device_info.json", json.dumps(meta, ensure_ascii=False, indent=2))
+
+        for snap in snapshots:
+            # Nom lisible : hostname_YYYY-MM-DD_HH-MM-SS_#id.txt
+            date_part = snap["created_at"].replace(":", "-").replace(" ", "_")
+            fname = f"{safe_host}_{date_part}_#{snap['id']}.txt"
+            zf.writestr(fname, snap["config"])
+
+    buf.seek(0)
+    zip_name = _safe_filename(f"{device['hostname']}_{device['ip_address']}") + "_snapshots.zip"
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
     )
 
 
