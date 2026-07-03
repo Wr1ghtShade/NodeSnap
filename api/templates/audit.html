@@ -412,14 +412,9 @@
 </table>
 
 <div class="pagination">
-    {% set qs = '' %}
-    {% if filter_username %}{% set qs = qs + '&username=' + filter_username %}{% endif %}
-    {% if filter_action %}{% set qs = qs + '&action=' + filter_action %}{% endif %}
-    {% if filter_source %}{% set qs = qs + '&source=' + filter_source %}{% endif %}
-
     {% if page > 1 %}
-        <a href="?page=1{{ qs }}">«</a>
-        <a href="?page={{ page - 1 }}{{ qs }}">‹</a>
+        <a href="?page=1{{ extra_qs }}">«</a>
+        <a href="?page={{ page - 1 }}{{ extra_qs }}">‹</a>
     {% else %}
         <span class="disabled">«</span>
         <span class="disabled">‹</span>
@@ -428,8 +423,8 @@
     <span class="info">{{ t('audit.page', current=page, total=total_pages) }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{{ qs }}">›</a>
-        <a href="?page={{ total_pages }}{{ qs }}">»</a>
+        <a href="?page={{ page + 1 }}{{ extra_qs }}">›</a>
+        <a href="?page={{ total_pages }}{{ extra_qs }}">»</a>
     {% else %}
         <span class="disabled">›</span>
         <span class="disabled">»</span>

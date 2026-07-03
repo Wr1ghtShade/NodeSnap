@@ -157,6 +157,38 @@ def update_device_metadata(
         return cur.rowcount > 0
 
 
+def get_snapshot_nav(conn, device_id: int, snapshot_id: int) -> dict:
+    """Calcule la navigation prev/next + position/total pour un snapshot donné.
+    Trie par id (et non created_at, qui n'a qu'une résolution à la seconde) :
+    l'id AUTOINCREMENT reflète toujours l'ordre d'insertion réel, même si deux
+    snapshots sont créés dans la même seconde (double scan rapide, scheduler...).
+    Retourne {'prev_id', 'next_id', 'position', 'total'}."""
+    prev_snap = conn.execute(
+        "SELECT id FROM config_snapshots WHERE device_id = ? AND id < ? "
+        "ORDER BY id DESC LIMIT 1",
+        (device_id, snapshot_id),
+    ).fetchone()
+    next_snap = conn.execute(
+        "SELECT id FROM config_snapshots WHERE device_id = ? AND id > ? "
+        "ORDER BY id ASC LIMIT 1",
+        (device_id, snapshot_id),
+    ).fetchone()
+    position = conn.execute(
+        "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ? AND id > ?",
+        (device_id, snapshot_id),
+    ).fetchone()["c"] + 1
+    total = conn.execute(
+        "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()["c"]
+    return {
+        "prev_id": prev_snap["id"] if prev_snap else None,
+        "next_id": next_snap["id"] if next_snap else None,
+        "position": position,
+        "total": total,
+    }
+
+
 def save_snapshot(device_id: int, config: str):
     """
     Enregistre un snapshot si la config a changé depuis le dernier.
@@ -165,9 +197,12 @@ def save_snapshot(device_id: int, config: str):
     digest = compute_hash(config)
     now = datetime.now().isoformat(timespec="seconds")
     with get_connection() as conn:
+        # Tri par id (et non created_at, qui n'a qu'une résolution à la seconde) :
+        # l'id AUTOINCREMENT reflète toujours l'ordre d'insertion réel, même si
+        # deux snapshots sont créés dans la même seconde.
         cur = conn.execute(
             "SELECT sha256 FROM config_snapshots WHERE device_id = ? "
-            "ORDER BY created_at DESC LIMIT 1",
+            "ORDER BY id DESC LIMIT 1",
             (device_id,),
         )
         last = cur.fetchone()

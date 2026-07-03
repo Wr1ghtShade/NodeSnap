@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Tests (jinja2 est déjà dans requirements.txt, réutilisé pour les tests de rendu template)
+pytest>=8.0

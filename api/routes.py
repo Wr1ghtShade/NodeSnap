@@ -7,7 +7,7 @@ import os
 import re
 import zipfile
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from fastapi import Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
@@ -39,6 +39,7 @@ from storage.credentials import (
 )
 from storage.database import (
     get_connection,
+    get_snapshot_nav,
     save_snapshot,
     update_device_metadata,
     upsert_device,
@@ -94,6 +95,25 @@ def _safe_next(next_url: str) -> str:
     return next_url
 
 
+def _login_redirect_url(next_url: str, **extra) -> str:
+    """Construit une URL /login?... avec les paramètres correctement URL-encodés.
+    `next` est validé via _safe_next() puis encodé comme les autres params :
+    sans ça, un '&' ou '#' dans next casserait la query string ou permettrait
+    d'injecter de faux paramètres (ex: error_code) lus par la page /login."""
+    params = {**extra, "next": _safe_next(next_url)}
+    return f"/login?{urlencode(params)}"
+
+
+def _order_snapshots(snap_a, snap_b):
+    """Ordonne deux snapshots (ancien, récent) par id, quel que soit l'ordre
+    d'origine des paramètres. L'id AUTOINCREMENT reflète toujours l'ordre
+    chronologique réel d'insertion, contrairement à l'URL id1/id2 qui peut
+    être appelée dans n'importe quel ordre (lien partagé, saisie manuelle...)."""
+    if snap_a["id"] <= snap_b["id"]:
+        return snap_a, snap_b
+    return snap_b, snap_a
+
+
 def _compute_diff(text_a: str, text_b: str) -> list[dict]:
     """Calcule un diff unifié structuré entre deux textes de config.
     Retourne une liste de lignes typées : hunk / del / add / ctx."""
@@ -121,6 +141,17 @@ def _compute_diff(text_a: str, text_b: str) -> list[dict]:
             new_ln += 1
             result.append({"type": "ctx", "old": old_ln, "new": new_ln, "text": raw[1:]})
     return result
+
+
+def _pagination_qs(username: str = "", action: str = "", source: str = "") -> str:
+    """Construit le fragment de query string (préfixé par '&') à ajouter aux
+    liens de pagination pour préserver les filtres actifs. URL-encodé : un
+    filtre contenant '&', '#' ou '%' ne doit pas casser ou détourner la query
+    string (voir audit.html qui embarquait ça brut dans le template)."""
+    filters = {k: v for k, v in (("username", username), ("action", action), ("source", source)) if v}
+    if not filters:
+        return ""
+    return "&" + urlencode(filters)
 
 
 def _safe_filename(name: str) -> str:
@@ -285,7 +316,7 @@ async def login_submit(
                    target=username, ip_address=ip, success=False,
                    details={"reason": "rate_limited", "failures": failures})
         return RedirectResponse(
-            url=f"/login?error_code=rate_limited&minutes={LOGIN_WINDOW_MIN}&next={_safe_next(next)}",
+            url=_login_redirect_url(next, error_code="rate_limited", minutes=LOGIN_WINDOW_MIN),
             status_code=HTTP_302_FOUND,
         )
 
@@ -295,7 +326,7 @@ async def login_submit(
         log_action("login_failed", username=username, source="web",
                    target=username, ip_address=ip, success=False)
         return RedirectResponse(
-            url=f"/login?error_code=invalid_credentials&next={_safe_next(next)}",
+            url=_login_redirect_url(next, error_code="invalid_credentials"),
             status_code=HTTP_302_FOUND,
         )
 
@@ -376,7 +407,7 @@ async def device_detail(request: Request, device_id: int):
             SELECT id, sha256, size_bytes, created_at
             FROM config_snapshots
             WHERE device_id = ?
-            ORDER BY created_at DESC
+            ORDER BY id DESC
         """, (device_id,)).fetchall()
     snapshots = [dict(s) for s in snaps_raw]
     creds = get_credentials(device_id) if has_credentials(device_id) else None
@@ -417,34 +448,17 @@ async def view_snapshot(request: Request, device_id: int, snapshot_id: int):
         ).fetchone()
         if not snapshot:
             raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
-        prev_snap = conn.execute(
-            "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at < ? "
-            "ORDER BY created_at DESC LIMIT 1",
-            (device_id, snapshot["created_at"]),
-        ).fetchone()
-        next_snap = conn.execute(
-            "SELECT id FROM config_snapshots WHERE device_id = ? AND created_at > ? "
-            "ORDER BY created_at ASC LIMIT 1",
-            (device_id, snapshot["created_at"]),
-        ).fetchone()
-        position = conn.execute(
-            "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ? AND created_at > ?",
-            (device_id, snapshot["created_at"]),
-        ).fetchone()["c"] + 1
-        total = conn.execute(
-            "SELECT COUNT(*) AS c FROM config_snapshots WHERE device_id = ?",
-            (device_id,),
-        ).fetchone()["c"]
+        nav = get_snapshot_nav(conn, device_id, snapshot["id"])
     return render(
         request, "snapshot_view.html",
         {
             "user": request.session.get("user"),
             "device": device,
             "snapshot": snapshot,
-            "prev_id": prev_snap["id"] if prev_snap else None,
-            "next_id": next_snap["id"] if next_snap else None,
-            "position": position,
-            "total": total,
+            "prev_id": nav["prev_id"],
+            "next_id": nav["next_id"],
+            "position": nav["position"],
+            "total": nav["total"],
         },
     )
 
@@ -469,6 +483,7 @@ async def view_diff(request: Request, device_id: int, id1: int, id2: int):
     if not snap_a or not snap_b:
         raise HTTPException(status_code=404, detail=_t(request, "err.snapshot_not_found"))
 
+    snap_a, snap_b = _order_snapshots(snap_a, snap_b)
     diff_lines = _compute_diff(snap_a["config"], snap_b["config"])
     added   = sum(1 for l in diff_lines if l["type"] == "add")
     removed = sum(1 for l in diff_lines if l["type"] == "del")
@@ -534,7 +549,7 @@ async def api_device_detail(request: Request, device_id: int):
             SELECT id, sha256, size_bytes, created_at
             FROM config_snapshots
             WHERE device_id = ?
-            ORDER BY created_at DESC
+            ORDER BY id DESC
         """, (device_id,)).fetchall()
     return JSONResponse({
         "device": dict(device),
@@ -616,7 +631,7 @@ async def export_device_zip(request: Request, device_id: int):
             raise HTTPException(status_code=404, detail=_t(request, "err.device_not_found"))
         snapshots = conn.execute(
             "SELECT id, config, created_at, sha256, size_bytes "
-            "FROM config_snapshots WHERE device_id = ? ORDER BY created_at ASC",
+            "FROM config_snapshots WHERE device_id = ? ORDER BY id ASC",
             (device_id,),
         ).fetchall()
 
@@ -1049,6 +1064,7 @@ async def audit_page(
             "filter_username": username,
             "filter_action": action,
             "filter_source": source,
+            "extra_qs": _pagination_qs(username, action, source),
             "distinct_users": list_distinct_users(),
             "all_actions": AUDIT_ACTIONS,
         },

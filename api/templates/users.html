@@ -136,17 +136,17 @@
             <td>{{ u.last_login or '—' }}</td>
             <td>
                 <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end;">
-                    <button class="btn secondary"
-                            onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.role }}')">
+                    <button class="btn secondary btn-edit-user"
+                            data-id="{{ u.id }}" data-username="{{ u.username }}" data-role="{{ u.role }}">
                         {{ t('users.btn_edit') }}
                     </button>
-                    <button class="btn secondary"
-                            onclick="openPasswordModal({{ u.id }}, '{{ u.username }}')">
+                    <button class="btn secondary btn-password-user"
+                            data-id="{{ u.id }}" data-username="{{ u.username }}">
                         {{ t('users.btn_password') }}
                     </button>
                     {% if u.id != user.id %}
-                    <button class="btn danger"
-                            onclick="deleteUser({{ u.id }}, '{{ u.username }}')"
+                    <button class="btn danger btn-delete-user"
+                            data-id="{{ u.id }}" data-username="{{ u.username }}"
                             title="{{ t('users.delete_tooltip') }}">
                         🗑
                     </button>
@@ -357,5 +357,20 @@
             alert(I.network_error + ' : ' + err.message);
         }
     }
+
+    // ---- Câblage des boutons par ligne via data-* + addEventListener ----
+    // (et non un onclick="fn(...)" avec le username interpolé dedans : un
+    // username ne peut pas être échappé de façon fiable pour un contexte JS
+    // inline en HTML — voir CHANGELOG. .dataset lit toujours la valeur brute,
+    // sans ré-interprétation.)
+    document.querySelectorAll('.btn-edit-user').forEach(btn => {
+        btn.addEventListener('click', () => openEditModal(btn.dataset.id, btn.dataset.username, btn.dataset.role));
+    });
+    document.querySelectorAll('.btn-password-user').forEach(btn => {
+        btn.addEventListener('click', () => openPasswordModal(btn.dataset.id, btn.dataset.username));
+    });
+    document.querySelectorAll('.btn-delete-user').forEach(btn => {
+        btn.addEventListener('click', () => deleteUser(btn.dataset.id, btn.dataset.username));
+    });
 </script>
 {% endblock %}

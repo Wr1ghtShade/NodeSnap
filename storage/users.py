@@ -169,9 +169,13 @@ def update_user(user_id: int, username: str = None, role: str = None) -> bool:
 
 
 def change_password(user_id: int, new_password: str) -> bool:
-    """Change le mot de passe et incrémente session_version pour invalider les sessions actives."""
+    """Change le mot de passe et incrémente session_version pour invalider les sessions actives.
+    Lève ValueError si l'utilisateur n'existe pas (au lieu d'un no-op silencieux qui
+    laisserait la route appelante répondre un faux succès et écrire un faux log d'audit)."""
     if len(new_password) < 8:
         raise ValueError("err.password_too_short")
+    if not get_user(user_id):
+        raise ValueError("err.user_not_found")
     with get_connection() as conn:
         cur = conn.execute(
             "UPDATE users SET password_hash = ?, "

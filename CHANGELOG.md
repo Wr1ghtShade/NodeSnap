@@ -5,6 +5,21 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.1] — 2026-07-03
+
+### 🐛 Corrections de bugs
+
+- **XSS stockée (users.html)** : le username était injecté sans échappement JS-safe dans des attributs `onclick="openEditModal(id, '{{ u.username }}', role)"`. Jinja échappe pour un contexte HTML, mais le navigateur décode les entités HTML *avant* d'exécuter le JS d'un `onclick` — un username `x'); alert(1); //` cassait hors de la chaîne JS et exécutait du code arbitraire dans la session de tout admin cliquant sur Éditer/Mot de passe/Supprimer. Remplacé par des attributs `data-*` + `addEventListener`, comme dans index.html
+- **Tri des snapshots non déterministe** : `created_at` n'a qu'une résolution à la seconde ; deux snapshots créés dans la même seconde (double scan rapide, scheduler déclenchant plusieurs devices au même tick) pouvaient casser la déduplication, la navigation prev/next et le calcul de position. Toutes les requêtes de tri/comparaison utilisent désormais `id` (AUTOINCREMENT, reflète toujours l'ordre d'insertion réel)
+- **Diff non ordonné côté serveur** : `/devices/{id}/snapshots/{id1}/diff/{id2}` faisait confiance à l'ordre id1/id2 de l'URL — un lien partagé ou modifié à la main pouvait afficher un diff inversé (ajouts ↔ suppressions). Le serveur force désormais systématiquement l'ordre chronologique (ancien → récent), quel que soit l'ordre des paramètres
+- **Query string non encodée (pagination audit)** : les liens de pagination de `/audit` étaient construits par concaténation brute des filtres dans le template — un nom d'utilisateur contenant `&` cassait ou détournait la query string. Construction déplacée côté Python avec `urlencode()`
+- **Paramètre `next` non encodé (redirections login)** : les redirections d'échec de connexion (`rate_limited`, `invalid_credentials`) concaténaient `next` brut dans la query string, permettant de casser ou d'injecter de faux paramètres (`error_code`) si `next` contenait `&`. Encodage systématique via `urlencode()`
+- **Faux succès sur changement de mot de passe** : `change_password()` sur un `user_id` inexistant retournait silencieusement `False`, mais la route répondait quand même `success: true` et écrivait un faux succès dans le journal d'audit. Lève désormais `ValueError("err.user_not_found")`, comme `update_user()`
+
+### 🧪 Tests
+
+- Mise en place d'une suite de tests unitaires (`pytest`, dossier `tests/`) couvrant chacun des correctifs ci-dessus : base SQLite temporaire isolée par test, rendu de template Jinja2 en isolation pour la régression XSS
+
 ## [1.0.0] — 2026-06-06
 
 ### 🎉 Version initiale
