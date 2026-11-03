@@ -1,5 +1,7 @@
 """NodeSnap - Couche de persistance SQLite."""
 import hashlib
+import logging
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -75,6 +77,12 @@ def init_db():
     with get_connection() as conn:
         conn.executescript(SCHEMA)
         _migrate_devices(conn)
+    # La base contient hashs de mots de passe, credentials chiffrés et configs
+    # d'équipements : lecture réservée au compte de service (umask par défaut = 644).
+    try:
+        os.chmod(DB_PATH, 0o600)
+    except OSError as e:
+        logging.getLogger("nodesnap.database").warning(f"chmod 600 impossible sur {DB_PATH} : {e}")
     _INITIALIZED = True
     return DB_PATH
 

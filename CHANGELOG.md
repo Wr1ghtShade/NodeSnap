@@ -5,6 +5,22 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.0] — 2026-11-03
+
+### 🔒 Sécurité (revue de code)
+
+- **Clés d'hôte SSH vérifiées (TOFU)** : les collecteurs (Netmiko, SSHDetect et le client paramiko brut pfSense/OPNsense) acceptaient n'importe quelle clé d'hôte (`AutoAddPolicy`), ce qui permettait à un attaquant en interception sur le réseau d'admin de récupérer les identifiants SSH envoyés — y compris ceux stockés pour les scans planifiés. La clé de chaque équipement est désormais apprise au premier scan dans `./known_hosts` (0600) et exigée ensuite ; une clé différente provoque un refus explicite. Nouveau module `core/hostkeys.py` + CLI `python -m core.hostkeys list|forget`. Désactivable via `NODESNAP_SSH_STRICT_HOST_KEYS=0`
+- **Algorithmes SSH legacy optionnels** : la réactivation globale de KEX SHA-1 / AES-CBC / 3DES / ssh-dss peut être coupée avec `NODESNAP_SSH_LEGACY_ALGOS=0`
+- **Rate-limit du login par couple (username, ip)** : le compteur `username OU ip` permettait à un tiers de verrouiller n'importe quel compte (dont admin) en 5 essais, et derrière un reverse-proxy sans `TRUSTED_PROXY=1` un seul attaquant bloquait tous les utilisateurs. Désormais : 5 échecs par couple (username, ip) + plafond de 30 échecs par ip
+- **Base SQLite en 0600** : `nodesnap.db` (hashs, credentials chiffrés, configurations) était créée avec l'umask par défaut (lisible par tout compte local), à côté du `.env` contenant la clé maître
+- **Mot de passe > 72 octets** : bcrypt ignore ou refuse (≥ 5.0) au-delà de 72 octets ; `create_user`/`change_password` lèvent maintenant `err.password_too_long` (FR/EN) au lieu d'une erreur 500 ou d'une troncature silencieuse
+- **Redirection non-authentifié** : `/login?next={path}` dans `auth_middleware` n'était pas URL-encodé (contrairement aux redirections d'échec de login corrigées en 1.1.1)
+- Documentation : avertissement sur l'exposition HTTP en clair et les nouvelles variables d'environnement (README FR/EN, `.env.example`)
+
+### 🧪 Tests
+
+- `tests/test_security_review.py` : TOFU / clé modifiée / oubli / port distinct / mode désactivé, rate-limit par couple, politique de mot de passe, encodage de `next`, permissions de la base
+
 ## [1.1.1] — 2026-07-03
 
 ### 🐛 Corrections de bugs

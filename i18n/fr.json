@@ -92,6 +92,7 @@
   "err.no_credentials":         "Aucun credential stocké pour cet équipement.",
   "err.invalid_role":           "Rôle invalide : {role}",
   "err.password_too_short":     "Le mot de passe doit faire au moins 8 caractères.",
+  "err.password_too_long":      "Le mot de passe ne doit pas dépasser 72 octets.",
   "err.user_exists":            "L'utilisateur '{username}' existe déjà.",
   "err.last_admin_demote":      "Impossible de retirer le dernier compte administrateur.",
   "err.last_admin_delete":      "Impossible de supprimer le dernier compte administrateur.",

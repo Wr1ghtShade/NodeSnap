@@ -54,27 +54,29 @@ def init_audit_table():
     _INITIALIZED = True
 
 
-def count_recent_failures(username: str, ip: str | None, window_minutes: int = 15) -> int:
-    """Compte les login_failed pour ce username/IP dans la fenêtre donnée.
-    Utilisé par le rate limiter du login. La requête combine les deux critères en OR
-    pour bloquer à la fois les attaques par dictionnaire (même username, IPs variées)
-    et le scanning (même IP, usernames variés)."""
+def count_recent_failures(username: str | None = None, ip: str | None = None,
+                          window_minutes: int = 15) -> int:
+    """Compte les login_failed dans la fenêtre donnée, filtrés par username
+    ET/OU ip (les critères fournis sont combinés en AND).
+
+    Utilisé par le rate limiter du login, qui applique deux seuils :
+      - par couple (username, ip) : bloque le brute-force d'un compte depuis une
+        source sans qu'un tiers puisse verrouiller ce compte pour son vrai
+        propriétaire (qui vient d'une autre IP) ;
+      - par ip seule (seuil plus haut) : bloque le scanning d'usernames.
+    """
     init_audit_table()
     cutoff = (datetime.now() - timedelta(minutes=window_minutes)).isoformat(timespec="seconds")
+    where = ["action = 'login_failed'", "timestamp >= ?"]
+    params: list = [cutoff]
+    if username:
+        where.append("username = ?"); params.append(username)
+    if ip:
+        where.append("ip_address = ?"); params.append(ip)
     with get_connection() as conn:
-        if ip:
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM audit_log "
-                "WHERE action = 'login_failed' AND timestamp >= ? "
-                "AND (username = ? OR ip_address = ?)",
-                (cutoff, username, ip),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM audit_log "
-                "WHERE action = 'login_failed' AND timestamp >= ? AND username = ?",
-                (cutoff, username),
-            ).fetchone()
+        row = conn.execute(
+            f"SELECT COUNT(*) AS c FROM audit_log WHERE {' AND '.join(where)}", params
+        ).fetchone()
     return row["c"]
 
 

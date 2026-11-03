@@ -196,6 +196,7 @@ NodeSnap/
 - 📋 Full audit log
 - 👥 Multi-user with roles (admin = write, user = read-only)
 - 🛡️ CSRF protection, login rate-limiting, security HTTP headers (CSP, X-Frame-Options…)
+- 🔑 SSH host-key verification for devices (TOFU, project-level `known_hosts`) against credential interception
 - 🌍 Multilingual interface (Français / English) with one-click switch
 
 ## ⚙️ Installation
@@ -227,6 +228,17 @@ Variables available in `.env`:
 | `NODESNAP_MASTER_KEY` | AES-256 key for credentials (auto-generated if missing) |
 | `TRUSTED_PROXY` | Set to `1` if the app is behind a reverse proxy (enables X-Forwarded-For) |
 | `HTTPS_ONLY` | Set to `1` when serving over HTTPS — marks the session cookie `Secure` |
+| `NODESNAP_SSH_STRICT_HOST_KEYS` | `1` (default): each device's SSH key is learned on first scan and enforced afterwards (`./known_hosts`). `0` disables verification (not recommended) |
+| `NODESNAP_SSH_LEGACY_ALGOS` | `1` (default): re-enables legacy SSH algorithms (SHA-1 KEX, AES-CBC, 3DES, ssh-dss) for old devices. `0` on a modern fleet |
+
+> ⚠️ **Network exposure**: the service listens over plain HTTP on `0.0.0.0:8000`. Web passwords **and device SSH passwords** travel in form posts: in production, put NodeSnap behind a TLS reverse proxy (`HTTPS_ONLY=1`, `TRUSTED_PROXY=1`) or bind to `127.0.0.1`.
+
+Host key changed after a legitimate device replacement:
+
+```bash
+python -m core.hostkeys list                  # pinned keys
+python -m core.hostkeys forget 10.0.0.1 [22]  # re-learned on next scan
+```
 
 ## 🚀 Usage
 

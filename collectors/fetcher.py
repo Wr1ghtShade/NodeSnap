@@ -1,9 +1,11 @@
 """NodeSnap - Récupération des configurations selon le vendor."""
 import logging
+import os
 import re
 import paramiko
 from netmiko import ConnectHandler
 from core.detector import VENDOR_TO_NETMIKO
+from core.hostkeys import configure_ssh_client, ensure_host_key, netmiko_hostkey_params
 
 log = logging.getLogger(__name__)
 
@@ -31,13 +33,18 @@ def _ensure(seq, extras):
     return tuple(out)
 
 
-paramiko.Transport._preferred_kex = _ensure(paramiko.Transport._preferred_kex, _LEGACY_KEX)
-paramiko.Transport._preferred_ciphers = _ensure(paramiko.Transport._preferred_ciphers, _LEGACY_CIPHERS)
-paramiko.Transport._preferred_macs = _ensure(paramiko.Transport._preferred_macs, _LEGACY_MACS)
-paramiko.Transport._preferred_keys = _ensure(paramiko.Transport._preferred_keys, _LEGACY_HOSTKEYS)
-paramiko.Transport._preferred_pubkeys = _ensure(paramiko.Transport._preferred_pubkeys, _LEGACY_HOSTKEYS)
-
-log.debug("paramiko legacy algorithms réactivés (KEX SHA-1, AES-CBC, HMAC-SHA1, ssh-rsa)")
+# Activés par défaut (parc hétérogène). Désactivable sur un parc moderne avec
+# NODESNAP_SSH_LEGACY_ALGOS=0 : la surface d'attaque SSH revient alors aux
+# valeurs par défaut de paramiko.
+if os.environ.get("NODESNAP_SSH_LEGACY_ALGOS", "1") != "0":
+    paramiko.Transport._preferred_kex = _ensure(paramiko.Transport._preferred_kex, _LEGACY_KEX)
+    paramiko.Transport._preferred_ciphers = _ensure(paramiko.Transport._preferred_ciphers, _LEGACY_CIPHERS)
+    paramiko.Transport._preferred_macs = _ensure(paramiko.Transport._preferred_macs, _LEGACY_MACS)
+    paramiko.Transport._preferred_keys = _ensure(paramiko.Transport._preferred_keys, _LEGACY_HOSTKEYS)
+    paramiko.Transport._preferred_pubkeys = _ensure(paramiko.Transport._preferred_pubkeys, _LEGACY_HOSTKEYS)
+    log.debug("paramiko legacy algorithms réactivés (KEX SHA-1, AES-CBC, HMAC-SHA1, ssh-rsa)")
+else:
+    log.info("Algorithmes SSH legacy désactivés (NODESNAP_SSH_LEGACY_ALGOS=0)")
 # -----------------------------------------------------------------------------
 
 # Commande de récupération de la config complète par vendor
@@ -187,7 +194,7 @@ def _fetch_pfsense_raw(host: str, port: int, username: str, password: str,
     import time
 
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    configure_ssh_client(client)   # known_hosts + RejectPolicy (voir core/hostkeys.py)
     client.connect(
         host, port=port, username=username, password=password,
         look_for_keys=False, allow_agent=False, timeout=timeout,
@@ -355,6 +362,9 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
     if vendor not in BACKUP_COMMANDS:
         raise ValueError(f"Pas de commande de backup définie pour : {vendor}")
 
+    # Vérifie / apprend la clé d'hôte AVANT d'envoyer le moindre identifiant.
+    ensure_host_key(host, port, timeout=timeout)
+
     # pfSense / OPNsense : bypass total de Netmiko (le menu console ne fournit pas
     # de prompt shell, donc Netmiko bloque dès session_preparation).
     if vendor in ("pfsense", "opnsense"):
@@ -384,6 +394,7 @@ def fetch_config(host: str, username: str, password: str, vendor: str,
         "timeout": timeout,
         "fast_cli": False,
         "use_keys": False,
+        **netmiko_hostkey_params(),
         "allow_agent": False,
     }
 
