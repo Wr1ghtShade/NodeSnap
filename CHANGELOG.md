@@ -11,6 +11,7 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 - **Clés d'hôte SSH vérifiées (TOFU)** : les collecteurs (Netmiko, SSHDetect et le client paramiko brut pfSense/OPNsense) acceptaient n'importe quelle clé d'hôte (`AutoAddPolicy`), ce qui permettait à un attaquant en interception sur le réseau d'admin de récupérer les identifiants SSH envoyés — y compris ceux stockés pour les scans planifiés. La clé de chaque équipement est désormais apprise au premier scan dans `./known_hosts` (0600) et exigée ensuite ; une clé différente provoque un refus explicite. Nouveau module `core/hostkeys.py` + CLI `python -m core.hostkeys list|forget`. Désactivable via `NODESNAP_SSH_STRICT_HOST_KEYS=0`
 - **Algorithmes SSH legacy optionnels** : la réactivation globale de KEX SHA-1 / AES-CBC / 3DES / ssh-dss peut être coupée avec `NODESNAP_SSH_LEGACY_ALGOS=0`
+- **Algorithmes SSH legacy filtrés sur ceux que paramiko implémente** : paramiko ≥ 4 a retiré `ssh-dss` et les KEX SHA-1, paramiko ≥ 5 aussi `ssh-rsa`. Les injecter quand même dans `_preferred_keys` était inoffensif tant qu'aucun `known_hosts` n'était chargé, mais dès qu'une clé d'hôte est connue paramiko valide la liste et lève `ValueError: unknown cipher` — tout scan après le premier aurait échoué. Détecté par le test de bout en bout, corrigé dans `_ensure()`. Conséquence à connaître : avec paramiko 5 (tiré par netmiko ≥ 4.8), les équipements qui n'offrent *que* ssh-dss / ssh-rsa-SHA1 / KEX SHA-1 ne sont plus joignables, quelle que soit la version de NodeSnap — épingler `paramiko<4` dans `requirements.txt` si ce cas existe sur votre parc
 - **Rate-limit du login par couple (username, ip)** : le compteur `username OU ip` permettait à un tiers de verrouiller n'importe quel compte (dont admin) en 5 essais, et derrière un reverse-proxy sans `TRUSTED_PROXY=1` un seul attaquant bloquait tous les utilisateurs. Désormais : 5 échecs par couple (username, ip) + plafond de 30 échecs par ip
 - **Base SQLite en 0600** : `nodesnap.db` (hashs, credentials chiffrés, configurations) était créée avec l'umask par défaut (lisible par tout compte local), à côté du `.env` contenant la clé maître
 - **Mot de passe > 72 octets** : bcrypt ignore ou refuse (≥ 5.0) au-delà de 72 octets ; `create_user`/`change_password` lèvent maintenant `err.password_too_long` (FR/EN) au lieu d'une erreur 500 ou d'une troncature silencieuse
@@ -20,6 +21,7 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 ### 🧪 Tests
 
 - `tests/test_security_review.py` : TOFU / clé modifiée / oubli / port distinct / mode désactivé, rate-limit par couple, politique de mot de passe, encodage de `next`, permissions de la base
+- `tests/e2e/run_ssh_e2e.py` (manuel, hors pytest) : faux équipement Cisco IOS en paramiko dans un sous-processus, scénario complet mode désactivé → TOFU → scans suivants → SSHDetect → clé modifiée → forget → client paramiko brut
 
 ## [1.1.1] — 2026-07-03
 

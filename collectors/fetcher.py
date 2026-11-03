@@ -25,11 +25,24 @@ _LEGACY_MACS = ("hmac-sha1", "hmac-sha1-96", "hmac-md5")
 _LEGACY_HOSTKEYS = ("ssh-rsa", "ssh-dss")
 
 
-def _ensure(seq, extras):
+def _ensure(seq, extras, known):
+    """Ajoute `extras` à la liste de préférence `seq`, en ne gardant que les algos
+    que cette version de paramiko implémente réellement (`known`).
+
+    Indispensable : paramiko >= 4 a retiré ssh-dss et les KEX SHA-1, paramiko >= 5
+    aussi ssh-rsa. Une entrée inconnue dans _preferred_keys est tolérée tant qu'aucun
+    known_hosts n'est chargé, mais dès qu'une clé d'hôte est connue paramiko
+    réordonne et VALIDE la liste (SSHClient.connect → sec_opts.key_types) et lève
+    `ValueError: unknown cipher` — ce qui casserait tout scan après le premier."""
     out = list(seq)
+    dropped = []
     for x in extras:
-        if x not in out:
+        if x not in known:
+            dropped.append(x)
+        elif x not in out:
             out.append(x)
+    if dropped:
+        log.debug(f"Algos legacy ignorés (absents de paramiko {paramiko.__version__}) : {', '.join(dropped)}")
     return tuple(out)
 
 
@@ -37,11 +50,12 @@ def _ensure(seq, extras):
 # NODESNAP_SSH_LEGACY_ALGOS=0 : la surface d'attaque SSH revient alors aux
 # valeurs par défaut de paramiko.
 if os.environ.get("NODESNAP_SSH_LEGACY_ALGOS", "1") != "0":
-    paramiko.Transport._preferred_kex = _ensure(paramiko.Transport._preferred_kex, _LEGACY_KEX)
-    paramiko.Transport._preferred_ciphers = _ensure(paramiko.Transport._preferred_ciphers, _LEGACY_CIPHERS)
-    paramiko.Transport._preferred_macs = _ensure(paramiko.Transport._preferred_macs, _LEGACY_MACS)
-    paramiko.Transport._preferred_keys = _ensure(paramiko.Transport._preferred_keys, _LEGACY_HOSTKEYS)
-    paramiko.Transport._preferred_pubkeys = _ensure(paramiko.Transport._preferred_pubkeys, _LEGACY_HOSTKEYS)
+    _T = paramiko.Transport
+    _T._preferred_kex     = _ensure(_T._preferred_kex,     _LEGACY_KEX,      _T._kex_info)
+    _T._preferred_ciphers = _ensure(_T._preferred_ciphers, _LEGACY_CIPHERS,  _T._cipher_info)
+    _T._preferred_macs    = _ensure(_T._preferred_macs,    _LEGACY_MACS,     _T._mac_info)
+    _T._preferred_keys    = _ensure(_T._preferred_keys,    _LEGACY_HOSTKEYS, _T._key_info)
+    _T._preferred_pubkeys = _ensure(_T._preferred_pubkeys, _LEGACY_HOSTKEYS, _T._key_info)
     log.debug("paramiko legacy algorithms réactivés (KEX SHA-1, AES-CBC, HMAC-SHA1, ssh-rsa)")
 else:
     log.info("Algorithmes SSH legacy désactivés (NODESNAP_SSH_LEGACY_ALGOS=0)")

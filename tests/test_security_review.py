@@ -145,3 +145,44 @@ def test_unauthenticated_redirect_encodes_next():
 
 def test_database_file_is_private(db):
     assert stat.S_IMODE(os.stat(db.DB_PATH).st_mode) == 0o600
+
+
+# ---------------------------------------------------------------------------
+# Algos legacy : jamais d'entrée inconnue de paramiko dans les listes de préférence
+# (sinon SSHClient.connect lève "unknown cipher" dès qu'un known_hosts est chargé)
+# ---------------------------------------------------------------------------
+
+def test_legacy_algorithms_are_all_known_to_paramiko():
+    import collectors.fetcher  # noqa: F401 — applique le monkeypatch au chargement
+    T = paramiko.Transport
+    assert set(T._preferred_kex) <= set(T._kex_info)
+    assert set(T._preferred_ciphers) <= set(T._cipher_info)
+    assert set(T._preferred_macs) <= set(T._mac_info)
+    assert set(T._preferred_keys) <= set(T._key_info)
+    assert set(T._preferred_pubkeys) <= set(T._key_info)
+
+
+def test_known_host_reconnect_does_not_raise_unknown_cipher(monkeypatch, hostkeys):
+    """Reproduit le chemin paramiko qui plantait : hôte déjà épinglé →
+    SSHClient.connect réordonne sec_opts.key_types avec la liste de préférence."""
+    import collectors.fetcher  # noqa: F401
+    key = paramiko.RSAKey.generate(1024)
+    _fake_remote(monkeypatch, hostkeys, key)
+    hostkeys.ensure_host_key("10.0.0.1")
+
+    client = paramiko.SSHClient()
+    hostkeys.configure_ssh_client(client)
+    sec_opts = paramiko.Transport(socket_stub()).get_security_options()
+    keytype = key.get_name()
+    if keytype == "ssh-rsa":                     # même mapping que paramiko.SSHClient.connect
+        keytype = "rsa-sha2-512" if "rsa-sha2-512" in sec_opts.key_types else "rsa-sha2-256"
+    other = [x for x in sec_opts.key_types if x != keytype]
+    sec_opts.key_types = [keytype] + other       # levait ValueError("unknown cipher")
+
+
+class socket_stub:
+    """Transport n'a besoin que d'un objet avec settimeout/ setblocking / close pour exister."""
+    def settimeout(self, *_): pass
+    def setblocking(self, *_): pass
+    def close(self): pass
+    def fileno(self): return -1
