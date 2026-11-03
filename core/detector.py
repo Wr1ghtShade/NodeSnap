@@ -1,6 +1,7 @@
 """NodeSnap - Détection automatique du vendor par SSH."""
 import logging
 from netmiko import ConnectHandler
+from core.hostkeys import ensure_host_key, netmiko_hostkey_params
 from netmiko.ssh_autodetect import SSHDetect
 
 log = logging.getLogger(__name__)
@@ -130,6 +131,9 @@ def detect_vendor(host: str, username: str, password: str,
     Retourne le nom du vendor interne ou None si non identifié.
     """
     # Options SSH robustes pour les vieux équipements (HP ProCurve notamment)
+    # Vérifie / apprend la clé d'hôte AVANT d'envoyer le moindre identifiant.
+    ensure_host_key(host, port, timeout=timeout)
+
     base_params = {
         "host": host,
         "username": username,
@@ -139,6 +143,7 @@ def detect_vendor(host: str, username: str, password: str,
         "fast_cli": False,
         "use_keys": False,
         "allow_agent": False,
+        **netmiko_hostkey_params(),
     }
 
     # --- Tentative 1 : SSHDetect natif ---

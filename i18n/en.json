@@ -92,6 +92,7 @@
   "err.no_credentials":         "No credentials stored for this device.",
   "err.invalid_role":           "Invalid role: {role}",
   "err.password_too_short":     "Password must be at least 8 characters long.",
+  "err.password_too_long":      "Password must not exceed 72 bytes.",
   "err.user_exists":            "User '{username}' already exists.",
   "err.last_admin_demote":      "Cannot remove the last administrator account.",
   "err.last_admin_delete":      "Cannot delete the last administrator account.",

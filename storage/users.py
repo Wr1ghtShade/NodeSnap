@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS users (
 
 VALID_ROLES = ("admin", "user")
 
+# bcrypt ne traite que les 72 premiers octets ; bcrypt >= 5 lève même une
+# ValueError au-delà. On refuse explicitement plutôt que tronquer en silence.
+PASSWORD_MIN_LEN   = 8
+PASSWORD_MAX_BYTES = 72
+
+
+def _check_password_policy(password: str) -> None:
+    if len(password) < PASSWORD_MIN_LEN:
+        raise ValueError("err.password_too_short")
+    if len(password.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise ValueError("err.password_too_long")
+
 
 def init_users_table():
     """Crée la table users + migre l'existant si besoin + promeut le 1er user en admin."""
@@ -67,8 +79,7 @@ def create_user(username: str, password: str, role: str = "user") -> int:
     où code est une clé i18n (err.*). Le formatage est fait côté route."""
     if role not in VALID_ROLES:
         raise ValueError(f"err.invalid_role|role={role}")
-    if len(password) < 8:
-        raise ValueError("err.password_too_short")
+    _check_password_policy(password)
     init_users_table()
     now = datetime.now().isoformat(timespec="seconds")
     with get_connection() as conn:
@@ -172,8 +183,7 @@ def change_password(user_id: int, new_password: str) -> bool:
     """Change le mot de passe et incrémente session_version pour invalider les sessions actives.
     Lève ValueError si l'utilisateur n'existe pas (au lieu d'un no-op silencieux qui
     laisserait la route appelante répondre un faux succès et écrire un faux log d'audit)."""
-    if len(new_password) < 8:
-        raise ValueError("err.password_too_short")
+    _check_password_policy(new_password)
     if not get_user(user_id):
         raise ValueError("err.user_not_found")
     with get_connection() as conn:

@@ -63,8 +63,9 @@ log = logging.getLogger("nodesnap.api.routes")
 PUBLIC_PATHS = {"/login", "/api/health", "/api/lang", "/static", "/favicon.ico"}
 
 # ---- Rate limit du login ----
-LOGIN_MAX_FAILURES = 5    # tentatives dans la fenêtre
-LOGIN_WINDOW_MIN   = 15   # fenêtre en minutes
+LOGIN_MAX_FAILURES    = 5    # échecs pour un même couple (username, ip) dans la fenêtre
+LOGIN_MAX_FAILURES_IP = 30   # échecs toutes cibles confondues depuis une même ip
+LOGIN_WINDOW_MIN      = 15   # fenêtre en minutes
 
 
 def _client_ip(request: Request) -> str:
@@ -256,7 +257,7 @@ async def auth_middleware(request: Request, call_next):
                 status_code=401,
                 content={"success": False, "error": _t(request, "err.auth_required")},
             )
-        return RedirectResponse(url=f"/login?next={path}", status_code=HTTP_302_FOUND)
+        return RedirectResponse(url=_login_redirect_url(path), status_code=HTTP_302_FOUND)
 
     # Vérifie que la session_version stockée correspond toujours à celle en base.
     # Si un admin a changé le mot de passe entre-temps, on déconnecte.
@@ -306,11 +307,12 @@ async def login_submit(
 
     # Rate limit : trop d'échecs récents pour ce username/IP -> refus
     try:
-        failures = count_recent_failures(username, ip, window_minutes=LOGIN_WINDOW_MIN)
+        failures    = count_recent_failures(username=username, ip=ip, window_minutes=LOGIN_WINDOW_MIN)
+        failures_ip = count_recent_failures(ip=ip, window_minutes=LOGIN_WINDOW_MIN) if ip != "?" else 0
     except Exception as e:
         log.warning(f"Rate-limit indisponible : {e}")
-        failures = 0
-    if failures >= LOGIN_MAX_FAILURES:
+        failures = failures_ip = 0
+    if failures >= LOGIN_MAX_FAILURES or failures_ip >= LOGIN_MAX_FAILURES_IP:
         log.warning(f"Login bloqué (rate limit) : user={username} ip={ip} failures={failures}")
         log_action("login_failed", username=username, source="web",
                    target=username, ip_address=ip, success=False,

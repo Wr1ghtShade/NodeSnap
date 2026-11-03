@@ -44,3 +44,6 @@ build/
 htmlcov/
 sync.sh
 sync.sh
+
+# Clés d'hôte SSH épinglées (générées au 1er scan)
+known_hosts

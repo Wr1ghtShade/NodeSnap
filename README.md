@@ -196,6 +196,7 @@ NodeSnap/
 - 📋 Journal d'audit complet
 - 👥 Gestion multi-utilisateurs avec rôles (admin = écriture, user = lecture seule)
 - 🛡️ Protection CSRF, rate limit du login, headers HTTP de sécurité (CSP, X-Frame-Options…)
+- 🔑 Vérification des clés d'hôte SSH des équipements (TOFU, `known_hosts` du projet) contre l'interception des identifiants
 - 🌍 Interface multilingue (Français / English) avec switch en un clic
 
 ## ⚙️ Installation
@@ -227,6 +228,17 @@ Variables disponibles dans `.env` :
 | `NODESNAP_MASTER_KEY` | Clé AES-256 pour les credentials (générée automatiquement si absente) |
 | `TRUSTED_PROXY` | Mettre à `1` si l'app est derrière un reverse-proxy (active X-Forwarded-For) |
 | `HTTPS_ONLY` | Mettre à `1` quand l'app est servie en HTTPS — marque le cookie de session `Secure` |
+| `NODESNAP_SSH_STRICT_HOST_KEYS` | `1` (défaut) : la clé SSH de chaque équipement est apprise au 1er scan puis exigée ensuite (`./known_hosts`). `0` désactive la vérification (déconseillé) |
+| `NODESNAP_SSH_LEGACY_ALGOS` | `1` (défaut) : réactive les algos SSH anciens (KEX SHA-1, AES-CBC, 3DES, ssh-dss) pour les vieux équipements. `0` sur un parc moderne |
+
+> ⚠️ **Exposition réseau** : le service écoute en HTTP sur `0.0.0.0:8000`. Les mots de passe web **et les mots de passe SSH des équipements** transitent dans les formulaires : en production, placez NodeSnap derrière un reverse-proxy TLS (`HTTPS_ONLY=1`, `TRUSTED_PROXY=1`) ou limitez l'écoute à `127.0.0.1`.
+
+Clé d'hôte modifiée après le remplacement légitime d'un équipement :
+
+```bash
+python -m core.hostkeys list                  # clés épinglées
+python -m core.hostkeys forget 10.0.0.1 [22]  # ré-apprise au prochain scan
+```
 
 ## 🚀 Utilisation
 
